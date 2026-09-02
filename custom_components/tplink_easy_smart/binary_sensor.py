@@ -1,7 +1,7 @@
 """Support for binary sensors."""
 
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 from typing import Final
 
 from homeassistant.components.binary_sensor import (
@@ -151,7 +151,7 @@ class TpLinkBinarySensor(
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self._attr_available
+        return self.coordinator.last_update_success and self._attr_available
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -181,19 +181,26 @@ class TpLinkPortStateBinarySensor(TpLinkBinarySensor):
         port_info = self.coordinator.get_port_state(self._port_number)
 
         if port_info:
-            self._attr_available = port_info.enabled
+            self._attr_available = True
 
             self._attr_is_on = (
                 port_info.enabled and port_info.speed_actual != PortSpeed.LINK_DOWN
             )
 
             self._attr_extra_state_attributes["number"] = port_info.number
+            self._attr_extra_state_attributes["enabled"] = port_info.enabled
+            self._attr_extra_state_attributes["flow_control_config"] = (
+                port_info.flow_control_config
+            )
+            self._attr_extra_state_attributes["flow_control_actual"] = (
+                port_info.flow_control_actual
+            )
             self._attr_extra_state_attributes["speed"] = DISPLAYED_PORT_SPEED.get(
                 port_info.speed_actual
             )
-            self._attr_extra_state_attributes[
-                "speed_config"
-            ] = DISPLAYED_PORT_SPEED.get(port_info.speed_config)
+            self._attr_extra_state_attributes["speed_config"] = (
+                DISPLAYED_PORT_SPEED.get(port_info.speed_config)
+            )
         else:
             self._attr_available = False
             self._attr_is_on = None
@@ -222,7 +229,7 @@ class TpLinkPortPoeStateBinarySensor(TpLinkBinarySensor):
         port_poe_info = self.coordinator.get_port_poe_state(self._port_number)
 
         if port_poe_info:
-            self._attr_available = port_poe_info.enabled
+            self._attr_available = True
 
             self._attr_is_on = (
                 port_poe_info.enabled
@@ -232,10 +239,10 @@ class TpLinkPortPoeStateBinarySensor(TpLinkBinarySensor):
             self._attr_extra_state_attributes["priority"] = DISPLAYED_POE_PRIORITY.get(
                 port_poe_info.priority
             )
-            self._attr_extra_state_attributes[
-                "power_limit"
-            ] = DISPLAYED_POE_POWER_LIMITS.get(
-                port_poe_info.power_limit, port_poe_info.power_limit
+            self._attr_extra_state_attributes["power_limit"] = (
+                DISPLAYED_POE_POWER_LIMITS.get(
+                    port_poe_info.power_limit, port_poe_info.power_limit
+                )
             )
             self._attr_extra_state_attributes["power_w"] = port_poe_info.power
             self._attr_extra_state_attributes["current_ma"] = port_poe_info.current
@@ -243,9 +250,9 @@ class TpLinkPortPoeStateBinarySensor(TpLinkBinarySensor):
             self._attr_extra_state_attributes["pd_class"] = DISPLAYED_POE_CLASSES.get(
                 port_poe_info.pd_class
             )
-            self._attr_extra_state_attributes[
-                "power_status"
-            ] = DISPLAYED_POE_POWER_STATUS.get(port_poe_info.power_status)
+            self._attr_extra_state_attributes["power_status"] = (
+                DISPLAYED_POE_POWER_STATUS.get(port_poe_info.power_status)
+            )
         else:
             self._attr_available = False
             self._attr_is_on = None

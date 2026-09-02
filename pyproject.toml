@@ -1,0 +1,34 @@
+[project]
+name = "hass-tplink-easy-smart-dev"
+version = "2026.9.0"
+requires-python = ">=3.14.2"
+dependencies = [
+    "aiohttp>=3.11",
+    "json5==0.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio>=1.2",
+    "pytest-homeassistant-custom-component==0.13.357",
+    "ruff>=0.12",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.uv]
+package = false

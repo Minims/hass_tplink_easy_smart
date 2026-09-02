@@ -1,19 +1,23 @@
-name: "Release assets"
+name: Release assets
 
 on:
   release:
     types: [published]
-    
+
+permissions:
+  contents: write
+
 jobs:
   artifacts:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
-      - name: "Check out repository"
-        uses: actions/checkout@v2
-      - name: "Zip component dir"
-        run: |
-          zip -r ./custom_components.zip ./custom_components      
-      - name: Release
-        uses: softprops/action-gh-release@v1
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build HACS archive
+        run: zip -r tplink_easy_smart.zip custom_components/tplink_easy_smart
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v3
         with:
-          files: custom_components.zip
+          files: tplink_easy_smart.zip

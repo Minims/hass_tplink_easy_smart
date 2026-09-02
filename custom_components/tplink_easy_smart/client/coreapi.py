@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import re
+from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
-from typing import Callable, Dict, Final, Iterable, Tuple, TypeAlias
+from typing import Any, Final
 
 import aiohttp
 import json5
@@ -16,24 +17,29 @@ APICALL_ERRCODE_UNAUTHORIZED: Final = -2
 APICALL_ERRCODE_REQUEST: Final = -3
 APICALL_ERRCODE_DISCONNECTED: Final = -4
 
-APICALL_ERRCAT_CREDENTIALS: Final = "user_pass_err"
 APICALL_ERRCAT_REQUEST: Final = "request_error"
 APICALL_ERRCAT_UNAUTHORIZED: Final = "unauthorized"
 APICALL_ERRCAT_DISCONNECTED: Final = "disconnected"
 
 AUTH_FAILURE_GENERAL: Final = "auth_general"
+AUTH_FAILURE_CANNOT_CONNECT: Final = "cannot_connect"
 AUTH_FAILURE_CREDENTIALS: Final = "auth_invalid_credentials"
 AUTH_USER_BLOCKED: Final = "auth_user_blocked"
 AUTH_TOO_MANY_USERS: Final = "auth_too_many_users"
 AUTH_SESSION_TIMEOUT: Final = "auth_session_timeout"
 
-_SCRIPT_REGEX = r".*<script>(.*)<\/script>"
-_VARIABLES_REGEX = r".*var\s+(?P<variable>[a-zA-Z0-9_]+)\s*=\s*(?P<value>[^;]+);\s*"
-_ARRAY_VALUES_REGEX = r"\s*new\s*Array\s*\((?P<items>[^\)]+)\)"
+_SCRIPT_REGEX = re.compile(
+    r"<script(?:\s[^>]*)?>(.*?)</script>", re.IGNORECASE | re.DOTALL
+)
+_VARIABLES_REGEX = re.compile(
+    r"\bvar\s+(?P<variable>[a-zA-Z0-9_]+)\s*=\s*(?P<value>[^;]+);",
+    re.DOTALL,
+)
+_ARRAY_VALUES_REGEX = re.compile(r"\s*new\s*Array\s*\((?P<items>[^\)]*)\)")
 
 _LOGGER = logging.getLogger(__name__)
 
-VariableValue: TypeAlias = str | int | list[str] | dict[str, any]
+type VariableValue = str | int | list[str] | dict[str, Any]
 
 _VAR_LOGON_INFO: str = "logonInfo"
 
@@ -91,13 +97,16 @@ class ApiCallError(Exception):
         return self._error_code
 
     @property
-    def category(self) -> int | None:
+    def category(self) -> str | None:
         """Error category."""
         return self._error_category
 
     def __str__(self, *args, **kwargs) -> str:
         """Return str(self)."""
-        return f"{self._message}; code: {self._error_code}, category: {self._error_category}"
+        return (
+            f"{self._message}; code: {self._error_code}, "
+            f"category: {self._error_category}"
+        )
 
     def __repr__(self) -> str:
         """Return repr(self)."""
@@ -109,26 +118,27 @@ class ApiCallError(Exception):
 # ---------------------------
 async def _get_response_text(response: ClientResponse) -> str:
     content_bytes = await response.content.read()
-    text = content_bytes.decode("utf-8")
-    return text
+    try:
+        return content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        # Current Easy Smart pages declare GB2312, while other revisions emit
+        # UTF-8. GB18030 is a compatible superset for non-ASCII device names.
+        return content_bytes.decode("gb18030", errors="replace")
 
 
 # ---------------------------
 #   _get_variables
 # ---------------------------
-def _get_variables(page: str) -> dict[str, str]:
+def _get_variables(page: str | None) -> dict[str, str]:
     result = {}
-
-    script_match = re.match(_SCRIPT_REGEX, page, re.RegexFlag.DOTALL)
-    if not script_match:
+    if not page:
         return result
 
-    script_content = script_match.group(0)
-
-    for variable_match in re.finditer(_VARIABLES_REGEX, script_content):
-        variable = variable_match.group("variable")
-        value = variable_match.group("value")
-        result[variable] = value
+    for script_match in _SCRIPT_REGEX.finditer(page):
+        for variable_match in _VARIABLES_REGEX.finditer(script_match.group(1)):
+            variable = variable_match.group("variable")
+            value = variable_match.group("value")
+            result[variable] = value.strip()
 
     return result
 
@@ -137,17 +147,19 @@ def _get_variables(page: str) -> dict[str, str]:
 #   _to_array
 # ---------------------------
 def _to_list(array_data: str) -> Iterable[str]:
-    match = re.match(_ARRAY_VALUES_REGEX, array_data)
+    match = _ARRAY_VALUES_REGEX.fullmatch(array_data)
+    if not match:
+        return
     array_items = match.group("items")
     if array_items:
         for item in array_items.split(","):
-            yield item.strip(' ,\r\n\t"')
+            yield item.strip(" ,\r\n\t\"'")
 
 
 # ---------------------------
 #   _to_dict
 # ---------------------------
-def _to_dict(json_data: str) -> dict[str, any] | None:
+def _to_dict(json_data: str) -> dict[str, Any] | None:
     return json5.loads(json_data) if json_data else None
 
 
@@ -190,12 +202,19 @@ def _get_variable(
 def _check_authorized(response: ClientResponse, result: str) -> bool:
     if response.status != 200:
         return False
-    if not result:
-        return False
     logon_info = _get_variable(result, _VAR_LOGON_INFO, VariableType.Str)
-    if logon_info:
-        return False
-    return True
+    return not logon_info
+
+
+def _raise_on_unexpected_status(response: ClientResponse, path: str) -> None:
+    """Raise a request error without misclassifying an HTTP failure as auth."""
+    if response.status in (200, 401, 403):
+        return
+    raise ApiCallError(
+        f"Api call error at {path}, status: {response.status}",
+        response.status,
+        APICALL_ERRCAT_REQUEST,
+    )
 
 
 # ---------------------------
@@ -210,14 +229,15 @@ class TpLinkWebApi:
         user: str,
         password: str,
         verify_ssl: bool,
+        session: aiohttp.ClientSession | None = None,
     ) -> None:
         """Initialize."""
         _LOGGER.debug("New instance of TpLinkWebApi created")
         self._user: str = user
         self._password: str = password
         self._verify_ssl: bool = verify_ssl
-        self._session: aiohttp.ClientSession | None = None
-        self._active_csrf: Dict | None = None
+        self._session: aiohttp.ClientSession | None = session
+        self._session_injected = session is not None
         self._is_initialized: bool = False
         self._call_locker = asyncio.Lock()
 
@@ -229,7 +249,11 @@ class TpLinkWebApi:
         """Return switch's configuration url."""
         return self._base_url
 
-    def _get_url(self, path) -> str:
+    def invalidate_authentication(self) -> None:
+        """Force authentication before the next request."""
+        self._is_initialized = False
+
+    def _get_url(self, path: str) -> str:
         """Return full address to the endpoint."""
         return self._base_url + "/" + path
 
@@ -240,77 +264,91 @@ class TpLinkWebApi:
             self._is_initialized = True
 
     async def _get_raw(self, path: str) -> ClientResponse:
-        """Perform GET request to the specified relative URL and return raw ClientResponse."""
+        """Perform GET and return the raw response."""
         try:
+            if self._session is None:
+                raise RuntimeError("HTTP session is not initialized")
             _LOGGER.debug("Performing GET to %s", path)
             response = await self._session.get(
                 url=self._get_url(path),
                 allow_redirects=True,
-                verify_ssl=self._verify_ssl,
-                timeout=TIMEOUT,
+                ssl=self._verify_ssl,
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT),
             )
             _LOGGER.debug("GET %s performed, status: %s", path, response.status)
             return response
-        except ServerDisconnectedError as sde:
+        except ServerDisconnectedError as ex:
             raise ApiCallError(
-                f"Can not perform GET request at {path} cause of {repr(sde)}",
+                f"Can not perform GET request at {path} cause of {ex!r}",
                 APICALL_ERRCODE_DISCONNECTED,
                 APICALL_ERRCAT_DISCONNECTED,
-            )
+            ) from ex
         except Exception as ex:
             _LOGGER.error("GET %s failed: %s", path, str(ex))
             raise ApiCallError(
-                f"Can not perform GET request at {path} cause of {repr(ex)}",
+                f"Can not perform GET request at {path} cause of {ex!r}",
                 APICALL_ERRCODE_REQUEST,
                 APICALL_ERRCAT_REQUEST,
-            )
+            ) from ex
 
-    async def _post_raw(self, path: str, data: Dict) -> ClientResponse:
-        """Perform POST request to the specified relative URL with specified body and return raw ClientResponse."""
+    async def _post_raw(
+        self,
+        path: str,
+        data: Mapping[str, Any] | Iterable[tuple[str, Any]] | None,
+    ) -> ClientResponse:
+        """Perform POST and return the raw response."""
         try:
+            if self._session is None:
+                raise RuntimeError("HTTP session is not initialized")
             _LOGGER.debug("Performing POST to %s", path)
             response = await self._session.post(
                 url=self._get_url(path),
                 data=data,
-                verify_ssl=self._verify_ssl,
-                timeout=TIMEOUT,
+                ssl=self._verify_ssl,
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT),
             )
             _LOGGER.debug("POST to %s performed, status: %s", path, response.status)
             return response
-        except ServerDisconnectedError as sde:
+        except ServerDisconnectedError as ex:
             raise ApiCallError(
-                f"Can not perform POST request at {path} cause of {repr(sde)}",
+                f"Can not perform POST request at {path} cause of {ex!r}",
                 APICALL_ERRCODE_DISCONNECTED,
                 APICALL_ERRCAT_DISCONNECTED,
-            )
+            ) from ex
         except Exception as ex:
             _LOGGER.error("POST %s failed: %s", path, str(ex))
             raise ApiCallError(
-                f"Can not perform POST request at {path} cause of {repr(ex)}",
+                f"Can not perform POST request at {path} cause of {ex!r}",
                 APICALL_ERRCODE_REQUEST,
                 APICALL_ERRCAT_REQUEST,
-            )
+            ) from ex
 
     def _refresh_session(self) -> None:
         """Initialize the client session (if not exists) and clear cookies."""
         _LOGGER.debug("Refresh session called")
         if self._session is None:
-            """Unsafe cookies for IP addresses instead of domain names"""
+            # The switch is normally addressed by IP, so cookies need an unsafe jar.
             jar = aiohttp.CookieJar(unsafe=True)
             self._session = aiohttp.ClientSession(cookie_jar=jar)
+            self._session_injected = False
             _LOGGER.debug("Session created")
         self._session.cookie_jar.clear()
-        self._active_csrf = None
 
     async def authenticate(self) -> None:
         """Perform authentication and return true when authentication success"""
+        self._is_initialized = False
         try:
             _LOGGER.debug("Authentication started")
             self._refresh_session()
             _LOGGER.debug("Performing logon")
             response = await self._post_raw(
                 "logon.cgi",
-                {"username": self._user, "password": self._password, "logon": "Login"},
+                {
+                    "username": self._user,
+                    "password": self._password,
+                    "cpassword": "",
+                    "logon": "Login",
+                },
             )
 
             if response.status != 200:
@@ -326,12 +364,15 @@ class TpLinkWebApi:
                     "Failed to get Logon response body", AUTH_FAILURE_GENERAL
                 )
 
-            array_items: list[str] = _get_variable(
-                result, _VAR_LOGON_INFO, VariableType.List
-            )
+            array_items = _get_variable(result, _VAR_LOGON_INFO, VariableType.List)
+            if not isinstance(array_items, list) or not array_items:
+                raise AuthenticationError(
+                    "Invalid Logon response body", AUTH_FAILURE_GENERAL
+                )
 
             if array_items[0] == "0":
                 _LOGGER.debug("Authentication success")
+                self._is_initialized = True
                 return
             elif array_items[0] == "1":
                 raise AuthenticationError(
@@ -348,7 +389,7 @@ class TpLinkWebApi:
                 )
             elif array_items[0] == "4":
                 raise AuthenticationError(
-                    "The number of the login user has been full, it is allowed 16 people to login at the same time",
+                    "The number of logged-in users has reached the limit of 16",
                     AUTH_TOO_MANY_USERS,
                 )
             elif array_items[0] == "5":
@@ -358,25 +399,26 @@ class TpLinkWebApi:
                 )
             else:
                 raise AuthenticationError(
-                    f"Unknonwn error {array_items[0]}", AUTH_FAILURE_GENERAL
+                    f"Unknown error {array_items[0]}", AUTH_FAILURE_GENERAL
                 )
 
         except AuthenticationError as ex:
-            _LOGGER.warning("Authentication failed: %s", {repr(ex)})
+            _LOGGER.warning("Authentication failed: %r", ex)
             raise
         except ApiCallError as ex:
-            _LOGGER.warning("Authentication failed: %s", {repr(ex)})
+            _LOGGER.warning("Authentication failed: %r", ex)
             raise AuthenticationError(
-                "Authentication failed due to api call error", AUTH_FAILURE_GENERAL
-            )
+                "Authentication failed due to api call error",
+                AUTH_FAILURE_CANNOT_CONNECT,
+            ) from ex
         except Exception as ex:
-            _LOGGER.warning("Authentication failed: %s", {repr(ex)})
+            _LOGGER.warning("Authentication failed: %r", ex)
             raise AuthenticationError(
                 "Authentication failed due to unknown error", AUTH_FAILURE_GENERAL
-            )
+            ) from ex
 
     async def get(
-        self, path: str, query: str | None = None, **kwargs: any
+        self, path: str, query: str | None = None, **kwargs: Any
     ) -> str | None:
         """Perform GET request to the relative address."""
         async with self._call_locker:
@@ -390,6 +432,7 @@ class TpLinkWebApi:
 
             response = await self._get_raw(relative_url)
             response_text = await _get_response_text(response)
+            _raise_on_unexpected_status(response, relative_url)
             _LOGGER.debug("Response: %s", response_text)
 
             if not check_authorized(response, response_text):
@@ -398,6 +441,7 @@ class TpLinkWebApi:
 
                 response = await self._get_raw(relative_url)
                 response_text = await _get_response_text(response)
+                _raise_on_unexpected_status(response, relative_url)
 
                 if not check_authorized(response, response_text):
                     raise ApiCallError(
@@ -409,7 +453,10 @@ class TpLinkWebApi:
             return response_text
 
     async def post(
-        self, path: str, data: dict | None = None, **kwargs: any
+        self,
+        path: str,
+        data: Mapping[str, Any] | Iterable[tuple[str, Any]] | None = None,
+        **kwargs: Any,
     ) -> str | None:
         """Perform POST request to the relative address."""
         async with self._call_locker:
@@ -421,6 +468,7 @@ class TpLinkWebApi:
 
             response = await self._post_raw(path, data)
             response_text = await _get_response_text(response)
+            _raise_on_unexpected_status(response, path)
             _LOGGER.debug("Response: %s", response_text)
 
             if not check_authorized(response, response_text):
@@ -429,6 +477,7 @@ class TpLinkWebApi:
 
                 response = await self._post_raw(path, data)
                 response_text = await _get_response_text(response)
+                _raise_on_unexpected_status(response, path)
 
                 if not check_authorized(response, response_text):
                     raise ApiCallError(
@@ -440,10 +489,13 @@ class TpLinkWebApi:
             return response_text
 
     async def get_variables(
-        self, path: str, variables: Iterable[Tuple[str, VariableType]], **kwargs: any
-    ) -> dict[str, VariableValue | None] | None:
-        """Perform GET request to the relative address and get dict with the specified variables."""
-        response_text = await self.get(path)
+        self,
+        path: str,
+        variables: Iterable[tuple[str, VariableType]],
+        **kwargs: Any,
+    ) -> dict[str, VariableValue | None]:
+        """Perform GET and return the requested JavaScript variables."""
+        response_text = await self.get(path, **kwargs)
         result = {}
         response_variables = _get_variables(response_text)
 
@@ -457,9 +509,9 @@ class TpLinkWebApi:
         return result
 
     async def get_variable(
-        self, path: str, variable: str, variable_type: VariableType, **kwargs: any
+        self, path: str, variable: str, variable_type: VariableType, **kwargs: Any
     ) -> VariableValue | None:
-        """Perform GET request to the relative address and get the value of the specified variable."""
+        """Perform GET and return one JavaScript variable."""
         result = await self.get_variables(path, [(variable, variable_type)], **kwargs)
         return result.get(variable) if result else None
 
@@ -467,5 +519,12 @@ class TpLinkWebApi:
         """Close session."""
         _LOGGER.debug("Disconnecting")
         if self._session is not None:
-            await self._session.close()
+            if self._session_injected:
+                # Home Assistant owns the shared connector. Detach this dedicated
+                # session instead of closing the connector or leaking the session.
+                self._session.detach()
+            else:
+                await self._session.close()
             self._session = None
+            self._session_injected = False
+        self._is_initialized = False

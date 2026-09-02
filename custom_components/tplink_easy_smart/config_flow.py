@@ -2,9 +2,9 @@
 
 import logging
 
+import aiohttp
 import voluptuous as vol
-
-from homeassistant.config_entries import CONN_CLASS_LOCAL_POLL, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, OptionsFlow
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -16,9 +16,13 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.device_registry import format_mac
 
-from .client.coreapi import AuthenticationError, TpLinkWebApi
+from .client.coreapi import AuthenticationError
+from .client.tplink_api import DataFormatError, TpLinkApi
 from .const import (
+    DEFAULT_ESTIMATED_PACKET_SIZE,
     DEFAULT_HOST,
     DEFAULT_NAME,
     DEFAULT_PASS,
@@ -30,6 +34,11 @@ from .const import (
     DEFAULT_USER,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    MAX_ESTIMATED_PACKET_SIZE,
+    MAX_SCAN_INTERVAL,
+    MIN_ESTIMATED_PACKET_SIZE,
+    MIN_SCAN_INTERVAL,
+    OPT_ESTIMATED_PACKET_SIZE,
     OPT_POE_STATE_SWITCHES,
     OPT_PORT_STATE_SWITCHES,
 )
@@ -41,10 +50,12 @@ _LOGGER = logging.getLogger(__name__)
 #   configured_instances
 # ---------------------------
 @callback
-def configured_instances(hass):
+def configured_instances(hass, exclude_entry_id: str | None = None):
     """Return a set of configured instances."""
     return set(
-        entry.data[CONF_NAME] for entry in hass.config_entries.async_entries(DOMAIN)
+        entry.data.get(CONF_NAME, entry.title)
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.entry_id != exclude_entry_id
     )
 
 
@@ -55,10 +66,6 @@ class TpLinkControllerConfigFlow(ConfigFlow, domain=DOMAIN):
     """TpLinkControllerConfigFlow class"""
 
     VERSION = 2
-    CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
-
-    def __init__(self):
-        """Initialize."""
 
     @staticmethod
     @callback
@@ -78,34 +85,28 @@ class TpLinkControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             if user_input[CONF_NAME] in configured_instances(self.hass):
                 errors["base"] = "name_exists"
 
-            # Test connection
-            api = TpLinkWebApi(
-                host=user_input[CONF_HOST],
-                port=user_input[CONF_PORT],
-                use_ssl=user_input[CONF_SSL],
-                user=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                verify_ssl=user_input[CONF_VERIFY_SSL],
+            switch_info, validation_error = await self._async_validate_switch(
+                user_input
             )
-            try:
-                await api.authenticate()
-            except AuthenticationError as aex:
-                errors["base"] = aex.reason_code or "auth_general"
-            except Exception as ex:
-                _LOGGER.warning("Setup failed: %s", {str(ex)})
-                errors["base"] = "auth_general"
-            finally:
-                await api.disconnect()
+            if validation_error:
+                errors["base"] = validation_error
 
             # Save instance
-            if not errors:
+            if not errors and switch_info and switch_info.mac:
+                await self.async_set_unique_id(format_mac(switch_info.mac))
+                self._abort_if_unique_id_configured(
+                    updates={CONF_HOST: user_input[CONF_HOST]}
+                )
                 return self.async_create_entry(
                     title=user_input[CONF_NAME], data=user_input
                 )
 
-            return self._show_config_form(user_input=user_input, errors=errors)
+            return self._show_config_form(
+                step_id="user", user_input=user_input, errors=errors
+            )
 
         return self._show_config_form(
+            step_id="user",
             user_input={
                 CONF_NAME: DEFAULT_NAME,
                 CONF_HOST: DEFAULT_HOST,
@@ -118,20 +119,104 @@ class TpLinkControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(self, user_input=None):
+        """Allow connection settings and credentials to be changed."""
+        entry = self._get_reconfigure_entry()
+        errors = {}
+        if user_input is not None:
+            if user_input[CONF_NAME] in configured_instances(self.hass, entry.entry_id):
+                errors["base"] = "name_exists"
+
+            switch_info, validation_error = await self._async_validate_switch(
+                user_input
+            )
+            if validation_error:
+                errors["base"] = validation_error
+            elif (
+                switch_info
+                and switch_info.mac
+                and entry.unique_id
+                and format_mac(switch_info.mac) != entry.unique_id
+            ):
+                errors["base"] = "wrong_device"
+
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    title=user_input[CONF_NAME],
+                    data=user_input,
+                )
+
+            return self._show_config_form(
+                step_id="reconfigure", user_input=user_input, errors=errors
+            )
+
+        defaults = {
+            CONF_NAME: entry.data.get(CONF_NAME, entry.title),
+            CONF_HOST: entry.data.get(CONF_HOST, DEFAULT_HOST),
+            CONF_USERNAME: entry.data.get(CONF_USERNAME, DEFAULT_USER),
+            CONF_PASSWORD: entry.data.get(CONF_PASSWORD, DEFAULT_PASS),
+            CONF_PORT: entry.data.get(CONF_PORT, DEFAULT_PORT),
+            CONF_SSL: entry.data.get(CONF_SSL, DEFAULT_SSL),
+            CONF_VERIFY_SSL: entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        }
+        return self._show_config_form(
+            step_id="reconfigure", user_input=defaults, errors=errors
+        )
+
+    async def _async_validate_switch(self, user_input):
+        """Authenticate and return switch information plus an error key."""
+        switch_info = None
+        error = None
+        session = async_create_clientsession(
+            self.hass,
+            verify_ssl=user_input[CONF_VERIFY_SSL],
+            auto_cleanup=False,
+            cookie_jar=aiohttp.CookieJar(unsafe=True),
+        )
+        api = TpLinkApi(
+            host=user_input[CONF_HOST],
+            port=user_input[CONF_PORT],
+            use_ssl=user_input[CONF_SSL],
+            user=user_input[CONF_USERNAME],
+            password=user_input[CONF_PASSWORD],
+            verify_ssl=user_input[CONF_VERIFY_SSL],
+            session=session,
+        )
+        try:
+            await api.authenticate()
+            switch_info = await api.get_device_info()
+            if not switch_info.mac:
+                raise DataFormatError("The switch did not return a MAC address")
+        except AuthenticationError as ex:
+            error = ex.reason_code or "auth_general"
+        except DataFormatError:
+            error = "invalid_response"
+        except Exception as ex:
+            _LOGGER.warning("Connection validation failed: %s", ex)
+            error = "auth_general"
+        finally:
+            await api.disconnect()
+        return switch_info, error
+
     # ---------------------------
     #   _show_config_form
     # ---------------------------
-    def _show_config_form(self, user_input, errors=None):
+    def _show_config_form(self, step_id, user_input, errors=None):
         """Show the configuration form to edit data."""
         return self.async_show_form(
-            step_id="user",
+            step_id=step_id,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_NAME, default=user_input[CONF_NAME]): str,
-                    vol.Required(CONF_HOST, default=user_input[CONF_HOST]): str,
+                    vol.Required(CONF_HOST, default=user_input[CONF_HOST]): vol.All(
+                        str, vol.Length(min=1)
+                    ),
                     vol.Required(CONF_USERNAME, default=user_input[CONF_USERNAME]): str,
                     vol.Required(CONF_PASSWORD, default=user_input[CONF_PASSWORD]): str,
-                    vol.Required(CONF_PORT, default=user_input[CONF_PORT]): int,
+                    vol.Required(CONF_PORT, default=user_input[CONF_PORT]): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=65535)
+                    ),
                     vol.Required(CONF_SSL, default=user_input[CONF_SSL]): bool,
                     vol.Required(
                         CONF_VERIFY_SSL, default=user_input[CONF_VERIFY_SSL]
@@ -175,7 +260,23 @@ class TpLinkControllerOptionsFlowHandler(OptionsFlow):
                                 CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
                             ),
                         ),
-                    ): int,
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+                    ),
+                    vol.Required(
+                        OPT_ESTIMATED_PACKET_SIZE,
+                        default=self._local_config_entry.options.get(
+                            OPT_ESTIMATED_PACKET_SIZE,
+                            DEFAULT_ESTIMATED_PACKET_SIZE,
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(
+                            min=MIN_ESTIMATED_PACKET_SIZE,
+                            max=MAX_ESTIMATED_PACKET_SIZE,
+                        ),
+                    ),
                 }
             ),
         )

@@ -3,10 +3,10 @@ from functools import wraps
 
 from .const import FEATURE_POE, URL_POE_SETTINGS_GET
 from .coreapi import (
+    APICALL_ERRCAT_DISCONNECTED,
     ApiCallError,
     TpLinkWebApi,
     VariableType,
-    APICALL_ERRCAT_DISCONNECTED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,8 +19,7 @@ class TpLinkFeaturesDetector:
     def __init__(self, core_api: TpLinkWebApi):
         """Initialize."""
         self._core_api = core_api
-        self._available_features = set()
-        self._is_initialized = False
+        self._available_features: set[str] = set()
 
     @staticmethod
     def disconnected_as_false(func):
@@ -29,7 +28,7 @@ class TpLinkFeaturesDetector:
             try:
                 return await func(*args, **kwargs)
             except ApiCallError as ace:
-                if ace.category == APICALL_ERRCAT_DISCONNECTED:
+                if ace.category == APICALL_ERRCAT_DISCONNECTED or ace.code == 404:
                     return False
                 raise
 
@@ -68,7 +67,12 @@ class TpLinkFeaturesDetector:
                 ("poe_port_num", VariableType.Int),
             ],
         )
-        return data.get("portConfig") is not None and data.get("poe_port_num") > 0
+        poe_port_num = data.get("poe_port_num")
+        return (
+            data.get("portConfig") is not None
+            and isinstance(poe_port_num, int)
+            and poe_port_num > 0
+        )
 
     async def update(self) -> None:
         """Update the available features list."""

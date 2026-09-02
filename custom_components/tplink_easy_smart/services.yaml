@@ -89,3 +89,321 @@ set_port_poe_settings:
           max: 30
           step: 0.1
           unit_of_measurement: W
+
+set_igmp_snooping:
+  name: Set IGMP snooping
+  description: Enables or disables IGMP snooping and report-message suppression.
+  fields:
+    mac_address: &mac_address
+      name: MAC address
+      description: MAC address of the target switch.
+      required: true
+      example: "11:22:33:AA:BB:CC"
+      selector:
+        text:
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+    report_suppression:
+      name: Report suppression
+      required: true
+      selector:
+        boolean:
+
+set_loop_prevention:
+  name: Set loop prevention
+  description: Enables or disables loop prevention.
+  fields:
+    mac_address: *mac_address
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+
+run_cable_diagnostic:
+  name: Run cable diagnostic
+  description: Runs the switch TDR test on one port. The link can be interrupted briefly.
+  fields:
+    mac_address: *mac_address
+    port_number: &port_number
+      name: Port number
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+
+set_port_mirror:
+  name: Set port mirroring
+  description: Replaces the port-mirroring destination and source configuration.
+  fields:
+    mac_address: *mac_address
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+    destination_port:
+      name: Destination port
+      description: Required when mirroring is enabled.
+      selector:
+        number:
+          min: 1
+          mode: box
+    ingress_ports: &port_list
+      name: Port list
+      description: YAML list of one-based port numbers, for example `[1, 2]`.
+      default: []
+      selector:
+        object:
+    egress_ports:
+      <<: *port_list
+
+set_lag:
+  name: Create or update a LAG
+  description: Replaces the members of one static link aggregation group.
+  fields:
+    mac_address: *mac_address
+    group_id: &group_id
+      name: Group ID
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    ports:
+      <<: *port_list
+      name: Member ports
+      required: true
+
+delete_lag:
+  name: Delete a LAG
+  description: Deletes one static link aggregation group.
+  fields:
+    mac_address: *mac_address
+    group_id: *group_id
+
+set_mtu_vlan:
+  name: Set MTU VLAN mode
+  description: Enables or disables MTU VLAN isolation. Changing VLAN mode may interrupt management access.
+  fields:
+    mac_address: *mac_address
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+    uplink_port:
+      name: Uplink port
+      description: Existing uplink is retained when omitted.
+      selector:
+        number:
+          min: 1
+          mode: box
+
+set_port_vlan_mode:
+  name: Set port-based VLAN mode
+  description: Enables or disables port-based VLANs. The web session can restart after this change.
+  fields:
+    mac_address: *mac_address
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+
+upsert_port_vlan:
+  name: Create or update a port-based VLAN
+  description: Creates or replaces one port-based VLAN membership.
+  fields:
+    mac_address: *mac_address
+    vlan_id:
+      name: VLAN ID
+      description: Port-based VLAN IDs range from 2 to the switch port count.
+      required: true
+      selector:
+        number:
+          min: 2
+          max: 4094
+          mode: box
+    member_ports:
+      <<: *port_list
+      name: Member ports
+      required: true
+
+delete_port_vlan:
+  name: Delete a port-based VLAN
+  description: Deletes one existing port-based VLAN.
+  fields:
+    mac_address: *mac_address
+    vlan_id:
+      name: VLAN ID
+      description: Port-based VLAN IDs range from 2 to the switch port count.
+      required: true
+      selector:
+        number:
+          min: 2
+          max: 4094
+          mode: box
+
+set_8021q_vlan_mode:
+  name: Set 802.1Q VLAN mode
+  description: Enables or disables IEEE 802.1Q VLANs. The web session can restart after this change.
+  fields:
+    mac_address: *mac_address
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+
+upsert_8021q_vlan:
+  name: Create or update an 802.1Q VLAN
+  description: Replaces a VLAN's name and tagged/untagged membership after validating all ports.
+  fields:
+    mac_address: *mac_address
+    vlan_id:
+      name: VLAN ID
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4094
+          mode: box
+    name:
+      name: VLAN name
+      description: Up to 10 letters, digits, hyphens, or underscores.
+      default: ""
+      selector:
+        text:
+    tagged_ports:
+      <<: *port_list
+      name: Tagged ports
+    untagged_ports:
+      <<: *port_list
+      name: Untagged ports
+
+delete_8021q_vlan:
+  name: Delete an 802.1Q VLAN
+  description: Deletes an existing VLAN. VLAN 1 is protected and cannot be deleted.
+  fields:
+    mac_address: *mac_address
+    vlan_id:
+      name: VLAN ID
+      required: true
+      selector:
+        number:
+          min: 2
+          max: 4094
+          mode: box
+
+set_pvid:
+  name: Set port PVID
+  description: Assigns an existing VLAN ID as the PVID of one or more ports.
+  fields:
+    mac_address: *mac_address
+    ports:
+      <<: *port_list
+      required: true
+    vlan_id:
+      name: VLAN ID
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4094
+          mode: box
+
+set_qos_mode:
+  name: Set QoS mode
+  description: Selects the global QoS classification mode.
+  fields:
+    mac_address: *mac_address
+    mode:
+      name: Mode
+      required: true
+      selector:
+        select:
+          options:
+            - "Port based"
+            - "802.1p based"
+            - "DSCP/802.1p based"
+
+set_qos_priority:
+  name: Set port QoS priority
+  description: Sets priority in port-based QoS mode. All members are updated when the port belongs to a LAG.
+  fields:
+    mac_address: *mac_address
+    port_number: *port_number
+    priority:
+      name: Priority
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: slider
+
+set_bandwidth_control:
+  name: Set port bandwidth limits
+  description: Sets ingress and egress limits in kbit/s. Zero means unlimited.
+  fields:
+    mac_address: *mac_address
+    port_number: *port_number
+    ingress_kbps:
+      name: Ingress rate
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+          unit_of_measurement: kbit/s
+    egress_kbps:
+      name: Egress rate
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+          unit_of_measurement: kbit/s
+
+set_storm_control:
+  name: Set port storm control
+  description: Limits selected broadcast, multicast, and unknown-unicast traffic classes.
+  fields:
+    mac_address: *mac_address
+    port_number: *port_number
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+    rate_kbps:
+      name: Total rate
+      default: 64
+      selector:
+        number:
+          min: 1
+          max: 1000000
+          mode: box
+          unit_of_measurement: kbit/s
+    unknown_unicast:
+      name: Unknown unicast
+      default: false
+      selector:
+        boolean:
+    multicast:
+      name: Multicast
+      default: false
+      selector:
+        boolean:
+    broadcast:
+      name: Broadcast
+      default: false
+      selector:
+        boolean:

@@ -3,7 +3,7 @@
         "title": "TP-Link Easy Smart",
         "step": {
             "user": {
-                "description": "TP-Link easy smart switch setup.",
+                "description": "TP-Link Easy Smart switch setup.",
                 "data": {
                     "name": "Integration name",
                     "host": "Host",
@@ -11,7 +11,7 @@
                     "username": "Username",
                     "password": "Password",
                     "ssl": "Use SSL",
-                    "verify_ssl": "Verify SSL cert"
+                    "verify_ssl": "Verify SSL certificate"
                 }
             },
             "reconfigure": {
@@ -28,15 +28,15 @@
             }
         },
         "error": {
-      "name_exists": "The name already used.",
-      "auth_general": "Can not authenticate.",
-      "cannot_connect": "Can not connect to the switch.",
+      "name_exists": "The name is already used.",
+      "auth_general": "Cannot authenticate.",
+      "cannot_connect": "Cannot connect to the switch.",
       "invalid_response": "The switch returned an invalid response.",
       "wrong_device": "The address belongs to a different switch.",
             "auth_invalid_credentials": "Invalid username or password.",
-            "auth_user_blocked": "The user is not allowed to login.",
-            "auth_too_many_users": "The number of the user that allowed to login has been full.",
-            "auth_session_timeout": "The session timeout has expired."
+            "auth_user_blocked": "The user is not allowed to log in.",
+            "auth_too_many_users": "The maximum number of sessions has been reached.",
+            "auth_session_timeout": "The session has expired."
         }
     },
     "options": {
@@ -46,7 +46,7 @@
                     "scan_interval": "Update interval",
                     "estimated_packet_size": "Assumed packet size for bandwidth estimates (bytes)"
                 },
-                "title": "TP-Link easy smart switch setup (1\/2)",
+                "title": "TP-Link Easy Smart setup (1/2)",
                 "description": "Basic options"
             },
             "features_select": {
@@ -54,7 +54,7 @@
                     "port_state_switches": "Port state switches",
                     "poe_state_switches": "Port PoE state switches"
                 },
-                "title": "TP-Link easy smart switch setup (2\/2)",
+                "title": "TP-Link Easy Smart setup (2/2)",
                 "description": "Controls"
             }
         }

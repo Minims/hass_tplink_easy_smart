@@ -34,8 +34,8 @@ DISPLAYED_POE_POWER_LIMITS: Final = {
 
 DISPLAYED_POE_CLASSES: Final = {
     PoeClass.CLASS_0: "Class 0",
-    PoeClass.CLASS_1: "Class 2",
-    PoeClass.CLASS_2: "Class 3",
+    PoeClass.CLASS_1: "Class 1",
+    PoeClass.CLASS_2: "Class 2",
     PoeClass.CLASS_3: "Class 3",
     PoeClass.CLASS_4: "Class 4",
 }
@@ -44,7 +44,7 @@ DISPLAYED_POE_POWER_STATUS: Final = {
     PoePowerStatus.OFF: "Off",
     PoePowerStatus.TURNING_ON: "Turning on",
     PoePowerStatus.ON: "On",
-    PoePowerStatus.OVELOAD: "Overload",
+    PoePowerStatus.OVERLOAD: "Overload",
     PoePowerStatus.SHORT: "Short",
     PoePowerStatus.NOSTANDARD_PD: "Non-standard PD",
     PoePowerStatus.VOLTAGE_HIGH: "Voltage high",

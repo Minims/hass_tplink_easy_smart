@@ -1,0 +1,62 @@
+{
+    "config": {
+        "title": "TP-Link Easy Smart",
+        "step": {
+            "user": {
+                "description": "Configuration du switch TP-Link Easy Smart.",
+                "data": {
+                    "name": "Nom de l’intégration",
+                    "host": "Hôte",
+                    "port": "Port",
+                    "username": "Nom d’utilisateur",
+                    "password": "Mot de passe",
+                    "ssl": "Utiliser SSL",
+                    "verify_ssl": "Vérifier le certificat SSL"
+                }
+            },
+            "reconfigure": {
+                "description": "Modifiez les paramètres de connexion du switch TP-Link Easy Smart.",
+                "data": {
+                    "name": "Nom de l’intégration",
+                    "host": "Hôte",
+                    "port": "Port",
+                    "username": "Nom d’utilisateur",
+                    "password": "Mot de passe",
+                    "ssl": "Utiliser SSL",
+                    "verify_ssl": "Vérifier le certificat SSL"
+                }
+            }
+        },
+        "error": {
+      "name_exists": "Ce nom est déjà utilisé.",
+      "auth_general": "Impossible de s’authentifier.",
+      "cannot_connect": "Impossible de se connecter au switch.",
+      "invalid_response": "Le switch a renvoyé une réponse invalide.",
+      "wrong_device": "Cette adresse correspond à un autre switch.",
+            "auth_invalid_credentials": "Nom d’utilisateur ou mot de passe incorrect.",
+            "auth_user_blocked": "Cet utilisateur n’est pas autorisé à se connecter.",
+            "auth_too_many_users": "Le nombre maximal de sessions est atteint.",
+            "auth_session_timeout": "La session a expiré."
+        }
+    },
+    "options": {
+        "step": {
+            "basic_options": {
+                "data": {
+                    "scan_interval": "Intervalle de mise à jour",
+                    "estimated_packet_size": "Taille supposée des paquets pour l’estimation du débit (octets)"
+                },
+                "title": "Configuration TP-Link Easy Smart (1/2)",
+                "description": "Options générales"
+            },
+            "features_select": {
+                "data": {
+                    "port_state_switches": "Commandes d’activation des ports",
+                    "poe_state_switches": "Commandes d’activation PoE"
+                },
+                "title": "Configuration TP-Link Easy Smart (2/2)",
+                "description": "Commandes"
+            }
+        }
+    }
+}

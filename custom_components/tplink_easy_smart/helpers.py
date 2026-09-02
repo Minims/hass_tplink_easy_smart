@@ -71,10 +71,12 @@ def get_coordinator(
 def pop_coordinator(
     hass: HomeAssistant, config_entry: ConfigEntry
 ) -> TpLinkDataUpdateCoordinator | None:
-    data = hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {})
-    if DATA_KEY_COORDINATOR in data:
-        return data.pop(DATA_KEY_COORDINATOR)
-    return None
+    domain_data = hass.data.get(DOMAIN, {})
+    data = domain_data.get(config_entry.entry_id, {})
+    coordinator = data.pop(DATA_KEY_COORDINATOR, None)
+    if not data:
+        domain_data.pop(config_entry.entry_id, None)
+    return coordinator
 
 
 # ---------------------------

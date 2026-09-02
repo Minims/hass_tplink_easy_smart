@@ -1,0 +1,199 @@
+"""Integration-level tests against the current Home Assistant API."""
+
+from typing import Any
+
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_SSL,
+    CONF_USERNAME,
+    CONF_VERIFY_SSL,
+)
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.tplink_easy_smart.client.classes import (
+    CableDiagnostic,
+    CableStatus,
+    IgmpSnoopingState,
+    LoopPreventionState,
+    PortSpeed,
+    PortState,
+    PortStatistics,
+    QosMode,
+    QosState,
+    TpLinkSystemInfo,
+)
+from custom_components.tplink_easy_smart.const import (
+    DATA_KEY_COORDINATOR,
+    DOMAIN,
+    OPT_PORT_STATE_SWITCHES,
+)
+from custom_components.tplink_easy_smart.services import ServiceNames
+
+
+class FakeTpLinkApi:
+    """Switch API fixture used by the Home Assistant setup test."""
+
+    instance: "FakeTpLinkApi | None" = None
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        type(self).instance = self
+        self.poe_limit: float | None = None
+        self.igmp_setting: tuple[bool, bool] | None = None
+        self.session = kwargs.get("session")
+
+    @property
+    def device_url(self) -> str:
+        return "http://192.0.2.1:80"
+
+    async def get_device_info(self) -> TpLinkSystemInfo:
+        return TpLinkSystemInfo(
+            name="TL-SG105E",
+            mac="AA:BB:CC:DD:EE:FF",
+            ip="192.0.2.1",
+            netmask="255.255.255.0",
+            gateway="192.0.2.254",
+            firmware="1.0.0 Build 20250710 Rel.71066",
+            hardware="TL-SG105E 5.0",
+        )
+
+    async def get_port_states(self) -> list[PortState]:
+        return [
+            PortState(
+                number=1,
+                enabled=True,
+                flow_control_config=True,
+                flow_control_actual=True,
+                speed_config=PortSpeed.AUTO,
+                speed_actual=PortSpeed.FULL_1000M,
+            )
+        ]
+
+    async def get_port_statistics(self) -> list[PortStatistics]:
+        return [
+            PortStatistics(
+                number=1,
+                enabled=True,
+                link_status=PortSpeed.FULL_1000M,
+                tx_good_packets=100,
+                tx_bad_packets=2,
+                rx_good_packets=200,
+                rx_bad_packets=3,
+            )
+        ]
+
+    async def is_feature_available(self, _feature: str) -> bool:
+        return False
+
+    async def get_igmp_snooping(self) -> IgmpSnoopingState:
+        return IgmpSnoopingState(enabled=True, report_suppression=False)
+
+    async def get_loop_prevention(self) -> LoopPreventionState:
+        return LoopPreventionState(enabled=True)
+
+    async def get_cable_diagnostics(self) -> list[CableDiagnostic]:
+        return [CableDiagnostic(number=1, status=CableStatus.NORMAL, length_m=12)]
+
+    async def get_qos(self) -> QosState:
+        return QosState(
+            mode=QosMode.PORT_BASED,
+            priorities=[2],
+            trunk_groups=[0],
+        )
+
+    async def set_port_state(
+        self,
+        _number: int,
+        _enabled: bool,
+        _speed_config: PortSpeed,
+        _flow_control_config: bool,
+    ) -> None:
+        return None
+
+    async def set_poe_limit(self, limit: float) -> None:
+        self.poe_limit = limit
+
+    async def set_igmp_snooping(self, enabled: bool, report_suppression: bool) -> None:
+        self.igmp_setting = (enabled, report_suppression)
+
+    async def disconnect(self) -> None:
+        if self.session is not None and not self.session.closed:
+            self.session.detach()
+        return None
+
+
+async def test_setup_entities_and_general_poe_service(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """Set up the integration, its entities, and dispatch its first service."""
+    monkeypatch.setattr(
+        "custom_components.tplink_easy_smart.update_coordinator.TpLinkApi",
+        FakeTpLinkApi,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Switch",
+        data={
+            CONF_NAME: "Test Switch",
+            CONF_HOST: "192.0.2.1",
+            CONF_PORT: 80,
+            CONF_SSL: False,
+            CONF_VERIFY_SSL: False,
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret",
+        },
+        options={OPT_PORT_STATE_SWITCHES: True},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.test_switch_port_1_tx_good_packets").state == "100"
+    assert hass.states.get("sensor.test_switch_port_1_rx_good_packets").state == "200"
+    assert hass.states.get("binary_sensor.test_switch_port_1_state").state == "on"
+    assert hass.states.get("switch.test_switch_port_1_enabled").state == "on"
+    assert hass.states.get("switch.test_switch_igmp_snooping").state == "on"
+    assert hass.states.get("switch.test_switch_loop_prevention").state == "on"
+    assert hass.states.get("select.test_switch_qos_mode").state == "Port based"
+
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    assert coordinator.config_entry is entry
+
+    async def fail_igmp_poll() -> IgmpSnoopingState:
+        raise RuntimeError("temporary IGMP polling failure")
+
+    monkeypatch.setattr(FakeTpLinkApi.instance, "get_igmp_snooping", fail_igmp_poll)
+    await coordinator._update_igmp_state()
+    assert coordinator.get_igmp_state() is None
+
+    await hass.services.async_call(
+        DOMAIN,
+        ServiceNames.SET_GENERAL_POE_LIMIT,
+        {"mac_address": "aa:bb:cc:dd:ee:ff", "power_limit": 50},
+        blocking=True,
+    )
+
+    assert FakeTpLinkApi.instance is not None
+    assert FakeTpLinkApi.instance.poe_limit == 50
+
+    await hass.services.async_call(
+        DOMAIN,
+        ServiceNames.SET_IGMP_SNOOPING,
+        {
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+            "enabled": False,
+            "report_suppression": True,
+        },
+        blocking=True,
+    )
+
+    assert FakeTpLinkApi.instance.igmp_setting == (False, True)
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert entry.entry_id not in hass.data[DOMAIN]
+    assert not hass.services.has_service(DOMAIN, ServiceNames.SET_GENERAL_POE_LIMIT)
