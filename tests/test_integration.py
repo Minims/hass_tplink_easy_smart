@@ -13,8 +13,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.tplink_easy_smart import async_migrate_entry
 from custom_components.tplink_easy_smart.client.classes import (
     CableDiagnostic,
     CableStatus,
@@ -125,6 +127,77 @@ class FakeTpLinkApi:
         if self.session is not None and not self.session.closed:
             self.session.detach()
         return None
+
+
+async def test_migration_enables_new_defaults_on_every_port(
+    hass: HomeAssistant,
+) -> None:
+    """Re-enable integration-disabled entities without overriding the user."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Switch",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    integration_disabled = []
+
+    entity_specs = [("switch", "igmp_report_suppression")]
+    for port_number in range(1, 6):
+        entity_specs.extend(
+            (
+                ("switch", f"port_{port_number}_flow_control"),
+                ("select", f"port_{port_number}_speed"),
+                ("select", f"port_{port_number}_qos_priority"),
+                ("sensor", f"port_{port_number}_tx_estimated_mbps"),
+                ("sensor", f"port_{port_number}_rx_estimated_mbps"),
+                ("sensor", f"port_{port_number}_total_estimated_mbps"),
+                ("sensor", f"port_{port_number}_cable_status"),
+                ("sensor", f"port_{port_number}_cable_length"),
+            )
+        )
+    for domain, function_uid in entity_specs:
+        integration_disabled.append(
+            registry.async_get_or_create(
+                domain,
+                DOMAIN,
+                f"{entry.unique_id}_{function_uid}_{entry.unique_id}",
+                config_entry=entry,
+                disabled_by=er.RegistryEntryDisabler.INTEGRATION,
+            )
+        )
+
+    user_disabled = registry.async_get_or_create(
+        "select",
+        DOMAIN,
+        f"{entry.unique_id}_port_6_speed_{entry.unique_id}",
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    bad_packets = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.unique_id}_port_2_tx_bad_packets_{entry.unique_id}",
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.INTEGRATION,
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    assert entry.version == 3
+    assert all(
+        registry.async_get(entity.entity_id).disabled_by is None
+        for entity in integration_disabled
+    )
+    assert (
+        registry.async_get(user_disabled.entity_id).disabled_by
+        is er.RegistryEntryDisabler.USER
+    )
+    assert (
+        registry.async_get(bad_packets.entity_id).disabled_by
+        is er.RegistryEntryDisabler.INTEGRATION
+    )
 
 
 async def test_setup_entities_and_general_poe_service(

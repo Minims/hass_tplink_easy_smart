@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.9.2
+
+- Re-enable every existing entity whose default changed in 2026.9.1, including
+  TX, RX and combined estimated bandwidth, cable diagnostics, flow control,
+  speed/duplex and QoS priority on every port, plus IGMP report suppression.
+  Entities disabled explicitly by the user remain disabled.
+
 ## 2026.9.1
 
 - Add credential-free ESCP discovery on the local IPv4 broadcast domains, with

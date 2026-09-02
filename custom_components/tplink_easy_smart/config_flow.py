@@ -74,7 +74,7 @@ def configured_instances(hass, exclude_entry_id: str | None = None):
 class TpLinkControllerConfigFlow(ConfigFlow, domain=DOMAIN):
     """TpLinkControllerConfigFlow class"""
 
-    VERSION = 2
+    VERSION = 3
 
     @staticmethod
     @callback

@@ -106,6 +106,10 @@ Good-packet counters, estimated rates, cable diagnostics, and all available
 configuration entities are enabled by default. Bad-packet counters remain
 disabled by default and can be enabled from the entity registry.
 
+Upgrading from an older release re-enables these entities on every port when
+they were disabled by the integration. Entities disabled manually by a user
+remain disabled.
+
 ## Traffic-rate accuracy
 
 Easy Smart firmware exposes packet counters, not byte counters. Rates are
