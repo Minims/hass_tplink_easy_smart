@@ -1,14 +1,16 @@
 {
   "domain": "tplink_easy_smart",
   "name": "TP-Link Easy Smart",
-  "integration_type": "device",
+  "codeowners": [
+    "@Minims"
+  ],
+  "config_flow": true,
   "documentation": "https://github.com/Minims/hass_tplink_easy_smart",
-  "issue_tracker": "https://github.com/Minims/hass_tplink_easy_smart/issues",
-  "codeowners": ["@Minims"],
+  "integration_type": "device",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Minims/hass_tplink_easy_smart/issues",
   "requirements": [
     "json5==0.15.0"
   ],
-  "version": "2026.9.0",
-  "config_flow": true
+  "version": "2026.9.0"
 }

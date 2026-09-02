@@ -1,62 +1,61 @@
 {
-    "config": {
-        "title": "TP-Link Easy Smart",
-        "step": {
-            "user": {
-                "description": "TP-Link easy smart switch setup.",
-                "data": {
-                    "name": "Integration name",
-                    "host": "Host",
-                    "port": "Port",
-                    "username": "Username",
-                    "password": "Password",
-                    "ssl": "Use SSL",
-                    "verify_ssl": "Verify SSL cert"
-                }
-            },
-            "reconfigure": {
-                "description": "Update the TP-Link Easy Smart connection settings.",
-                "data": {
-                    "name": "Integration name",
-                    "host": "Host",
-                    "port": "Port",
-                    "username": "Username",
-                    "password": "Password",
-                    "ssl": "Use SSL",
-                    "verify_ssl": "Verify SSL certificate"
-                }
-            }
-        },
-        "error": {
+  "config": {
+    "step": {
+      "user": {
+        "description": "TP-Link easy smart switch setup.",
+        "data": {
+          "name": "Integration name",
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use SSL",
+          "verify_ssl": "Verify SSL cert"
+        }
+      },
+      "reconfigure": {
+        "description": "Update the TP-Link Easy Smart connection settings.",
+        "data": {
+          "name": "Integration name",
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use SSL",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
       "name_exists": "The name already used.",
       "auth_general": "Can not authenticate.",
       "cannot_connect": "Can not connect to the switch.",
       "invalid_response": "The switch returned an invalid response.",
       "wrong_device": "The address belongs to a different switch.",
-            "auth_invalid_credentials": "Invalid username or password.",
-            "auth_user_blocked": "The user is not allowed to login.",
-            "auth_too_many_users": "The number of the user that allowed to login has been full.",
-            "auth_session_timeout": "The session timeout has expired."
-        }
-    },
-    "options": {
-        "step": {
-            "basic_options": {
-                "data": {
-                    "scan_interval": "Update interval",
-                    "estimated_packet_size": "Assumed packet size for bandwidth estimates (bytes)"
-                },
-                "title": "TP-Link easy smart switch setup (1\/2)",
-                "description": "Basic options"
-            },
-            "features_select": {
-                "data": {
-                    "port_state_switches": "Port state switches",
-                    "poe_state_switches": "Port PoE state switches"
-                },
-                "title": "TP-Link easy smart switch setup (2\/2)",
-                "description": "Controls"
-            }
-        }
+      "auth_invalid_credentials": "Invalid username or password.",
+      "auth_user_blocked": "The user is not allowed to login.",
+      "auth_too_many_users": "The number of the user that allowed to login has been full.",
+      "auth_session_timeout": "The session timeout has expired."
     }
+  },
+  "options": {
+    "step": {
+      "basic_options": {
+        "data": {
+          "scan_interval": "Update interval",
+          "estimated_packet_size": "Assumed packet size for bandwidth estimates (bytes)"
+        },
+        "title": "TP-Link easy smart switch setup (1/2)",
+        "description": "Basic options"
+      },
+      "features_select": {
+        "data": {
+          "port_state_switches": "Port state switches",
+          "poe_state_switches": "Port PoE state switches"
+        },
+        "title": "TP-Link easy smart switch setup (2/2)",
+        "description": "Controls"
+      }
+    }
+  }
 }
