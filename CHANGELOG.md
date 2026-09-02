@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026.9.1
+
+- Add credential-free ESCP discovery on the local IPv4 broadcast domains, with
+  a manual configuration fallback, validated on a physical TL-SG105E V5 running
+  firmware `1.0.0 Build 20250710 Rel.71066`.
+- Expose the normalized switch MAC as a native Home Assistant device
+  connection.
+- Add an enabled-by-default cable-test button for every supported port while
+  retaining the cable-diagnostic action for automations.
+- Enable estimated bandwidth, cable diagnostic sensors, port state, PoE, flow
+  control, speed/duplex, IGMP suppression and QoS priority entities by default.
+- Clarify which compatibility claims come from physical devices, upstream
+  reports or static firmware analysis.
+
 ## 2026.9.0
 
 - Merge monitoring and switch-management features into one integration and

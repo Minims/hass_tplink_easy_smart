@@ -88,7 +88,7 @@ _PORT_STATISTIC_TYPES: Final = (
         SensorDeviceClass.DATA_RATE,
         SensorStateClass.MEASUREMENT,
         "mdi:upload-network",
-        False,
+        True,
     ),
     (
         "total_estimated_mbps",
@@ -99,7 +99,7 @@ _PORT_STATISTIC_TYPES: Final = (
         SensorDeviceClass.DATA_RATE,
         SensorStateClass.MEASUREMENT,
         "mdi:swap-horizontal",
-        False,
+        True,
     ),
     (
         "rx_estimated_mbps",
@@ -110,7 +110,7 @@ _PORT_STATISTIC_TYPES: Final = (
         SensorDeviceClass.DATA_RATE,
         SensorStateClass.MEASUREMENT,
         "mdi:download-network",
-        False,
+        True,
     ),
 )
 
@@ -234,7 +234,7 @@ async def async_setup_entry(
                             key=f"port_{port_number}_cable_status",
                             icon="mdi:ethernet-cable",
                             entity_category=EntityCategory.DIAGNOSTIC,
-                            entity_registry_enabled_default=False,
+                            entity_registry_enabled_default=True,
                             device_name=coordinator.get_switch_info().name,
                             function_uid=f"port_{port_number}_cable_status",
                             function_name=f"Port {port_number} cable status",
@@ -251,7 +251,7 @@ async def async_setup_entry(
                             native_unit_of_measurement=UnitOfLength.METERS,
                             state_class=SensorStateClass.MEASUREMENT,
                             entity_category=EntityCategory.DIAGNOSTIC,
-                            entity_registry_enabled_default=False,
+                            entity_registry_enabled_default=True,
                             device_name=coordinator.get_switch_info().name,
                             function_uid=f"port_{port_number}_cable_length",
                             function_name=f"Port {port_number} cable length",

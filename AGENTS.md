@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The Home Assistant custom integration lives in `custom_components/tplink_easy_smart/`. Home Assistant platforms (`sensor.py`, `switch.py`, `select.py`, and `binary_sensor.py`) should remain thin; shared polling belongs in `update_coordinator.py`, services in `services.py`, and TP-Link HTTP/parsing logic in `client/`. Keep user-facing text synchronized across `strings.json` and `translations/`. Tests are under `tests/`, user documentation under `docs/`, and CI/release automation under `.github/workflows/`.
+The Home Assistant custom integration lives in `custom_components/tplink_easy_smart/`. Home Assistant platforms (`sensor.py`, `switch.py`, `select.py`, `button.py`, and `binary_sensor.py`) should remain thin; shared polling belongs in `update_coordinator.py`, services in `services.py`, and TP-Link HTTP/parsing logic in `client/`. Keep user-facing text synchronized across `strings.json` and `translations/`. Tests are under `tests/`, user documentation under `docs/`, and CI/release automation under `.github/workflows/`.
 
 ## Build, Test, and Development Commands
 

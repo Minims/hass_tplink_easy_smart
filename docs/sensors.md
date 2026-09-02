@@ -11,6 +11,9 @@ exposes these attributes:
 | `gateway` | Default gateway |
 | `netmask` | Subnet mask |
 
+The MAC address is also registered as the native network connection of the
+Home Assistant device and appears in its device information.
+
 ## Port packet statistics
 
 The integration reads `PortStatisticsRpm.htm` and creates the following
@@ -22,11 +25,11 @@ diagnostic sensors for every detected port:
 | `port_<n>_rx_good_packets` | Successfully received packets | Yes |
 | `port_<n>_tx_bad_packets` | Failed transmitted packets | No |
 | `port_<n>_rx_bad_packets` | Failed received packets | No |
-| `port_<n>_tx_estimated_bandwidth` | Estimated transmit rate in Mbps | No |
-| `port_<n>_rx_estimated_bandwidth` | Estimated receive rate in Mbps | No |
-| `port_<n>_estimated_bandwidth` | Combined estimated TX and RX rate in Mbps | No |
+| `port_<n>_tx_estimated_bandwidth` | Estimated transmit rate in Mbps | Yes |
+| `port_<n>_rx_estimated_bandwidth` | Estimated receive rate in Mbps | Yes |
+| `port_<n>_estimated_bandwidth` | Combined estimated TX and RX rate in Mbps | Yes |
 
-The full entity ID starts with `sensor.<integration_name>_`. Disabled entities
+The full entity ID starts with `sensor.<integration_name>_`. Bad-packet sensors
 can be enabled from **Settings > Devices & services > Entities**.
 
 Packet counters are exact switch values and use Home Assistant's
@@ -101,13 +104,14 @@ Possible power statuses include `On`, `Off`, `Turning on`, `Overload`, `Short`,
 ## Cable diagnostics
 
 When the firmware exposes its cable-test page, the integration creates two
-diagnostic sensors per port, disabled by default:
+diagnostic sensors per port, enabled by default:
 
 | Entity suffix | Value |
 |---|---|
 | `port_<n>_cable_status` | `not tested`, `no cable`, `normal`, `open`, `short`, `open short`, `cross cable`, or `unknown` |
 | `port_<n>_cable_length` | Cable length or fault distance in metres |
 
-Call `tplink_easy_smart.run_cable_diagnostic` to run the TDR test and refresh
-these values. Testing can briefly interrupt the selected port. The integration
-uses the delay returned by the firmware before reading the result.
+Press `button.<integration_name>_port_<n>_cable_test` or call
+`tplink_easy_smart.run_cable_diagnostic` to run the TDR test and refresh these
+values. Testing can briefly interrupt the selected port. The integration uses
+the delay returned by the firmware before reading the result.

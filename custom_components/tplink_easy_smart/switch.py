@@ -114,7 +114,7 @@ async def async_setup_entry(
                 TpLinkPortSwitchEntityDescription(
                     key=f"port_{port_number}_flow_control",
                     icon="mdi:swap-horizontal",
-                    entity_registry_enabled_default=False,
+                    entity_registry_enabled_default=True,
                     port_number=port_number,
                     device_name=coordinator.get_switch_info().name,
                     function_uid=_FUNCTION_UID_PORT_FLOW_CONTROL_FORMAT.format(
@@ -145,7 +145,7 @@ async def async_setup_entry(
                     TpLinkSwitchEntityDescription(
                         key="igmp_report_suppression",
                         icon="mdi:message-off-outline",
-                        entity_registry_enabled_default=False,
+                        entity_registry_enabled_default=True,
                         device_name=coordinator.get_switch_info().name,
                         function_uid=_FUNCTION_UID_IGMP_SUPPRESSION,
                         function_name=_FUNCTION_DISPLAYED_NAME_IGMP_SUPPRESSION,

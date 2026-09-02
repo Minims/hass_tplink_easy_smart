@@ -4,6 +4,7 @@ import logging
 
 import aiohttp
 import voluptuous as vol
+from homeassistant.components.network import async_get_ipv4_broadcast_addresses
 from homeassistant.config_entries import ConfigFlow, OptionsFlow
 from homeassistant.const import (
     CONF_HOST,
@@ -20,6 +21,11 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.device_registry import format_mac
 
 from .client.coreapi import AuthenticationError
+from .client.discovery import (
+    DiscoveredSwitch,
+    DiscoveryError,
+    async_discover_switches,
+)
 from .client.tplink_api import DataFormatError, TpLinkApi
 from .const import (
     DEFAULT_ESTIMATED_PACKET_SIZE,
@@ -44,6 +50,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_CONF_DISCOVERED_DEVICE = "device"
+_MANUAL_CONFIGURATION = "__manual__"
 
 
 # ---------------------------
@@ -79,44 +88,134 @@ class TpLinkControllerConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
-        errors = {}
         if user_input is not None:
-            # Check if instance with this name already exists
-            if user_input[CONF_NAME] in configured_instances(self.hass):
-                errors["base"] = "name_exists"
+            return await self._async_process_config(user_input, step_id="user")
 
-            switch_info, validation_error = await self._async_validate_switch(
-                user_input
-            )
-            if validation_error:
-                errors["base"] = validation_error
-
-            # Save instance
-            if not errors and switch_info and switch_info.mac:
-                await self.async_set_unique_id(format_mac(switch_info.mac))
-                self._abort_if_unique_id_configured(
-                    updates={CONF_HOST: user_input[CONF_HOST]}
-                )
-                return self.async_create_entry(
-                    title=user_input[CONF_NAME], data=user_input
-                )
-
-            return self._show_config_form(
-                step_id="user", user_input=user_input, errors=errors
-            )
+        discovered = await self._async_find_switches()
+        if discovered:
+            self._discovered_switches = {
+                format_mac(device.mac): device for device in discovered
+            }
+            return self._show_discovery_form()
 
         return self._show_config_form(
-            step_id="user",
+            step_id="user", user_input=self._default_config(), errors={}
+        )
+
+    async def async_step_discovery(self, user_input=None):
+        """Select a switch returned by the local ESCP scan."""
+        if user_input is None:
+            return self._show_discovery_form()
+
+        selection = user_input[_CONF_DISCOVERED_DEVICE]
+        if selection == _MANUAL_CONFIGURATION:
+            return self._show_config_form(
+                step_id="user", user_input=self._default_config(), errors={}
+            )
+
+        self._selected_discovery = self._discovered_switches[selection]
+        device = self._selected_discovery
+        return self._show_config_form(
+            step_id="discovery_credentials",
             user_input={
-                CONF_NAME: DEFAULT_NAME,
-                CONF_HOST: DEFAULT_HOST,
+                CONF_NAME: device.name or device.model or DEFAULT_NAME,
+                CONF_HOST: device.host,
                 CONF_USERNAME: DEFAULT_USER,
                 CONF_PASSWORD: DEFAULT_PASS,
                 CONF_PORT: DEFAULT_PORT,
                 CONF_SSL: DEFAULT_SSL,
                 CONF_VERIFY_SSL: DEFAULT_VERIFY_SSL,
             },
-            errors=errors,
+            errors={},
+        )
+
+    async def async_step_discovery_credentials(self, user_input=None):
+        """Authenticate with a switch selected from discovery."""
+        device = getattr(self, "_selected_discovery", None)
+        if device is None:
+            return await self.async_step_user()
+        if user_input is not None:
+            return await self._async_process_config(
+                user_input,
+                step_id="discovery_credentials",
+                expected_mac=device.mac,
+            )
+        return await self.async_step_discovery(
+            {_CONF_DISCOVERED_DEVICE: format_mac(device.mac)}
+        )
+
+    async def _async_find_switches(self) -> list[DiscoveredSwitch]:
+        """Run a best-effort scan on every enabled IPv4 broadcast domain."""
+        try:
+            broadcasts = await async_get_ipv4_broadcast_addresses(self.hass)
+            return await async_discover_switches(
+                broadcast_addresses=(str(address) for address in broadcasts)
+            )
+        except DiscoveryError as ex:
+            _LOGGER.debug("Easy Smart discovery is unavailable: %s", ex)
+        except Exception:
+            _LOGGER.warning("Easy Smart discovery failed", exc_info=True)
+        return []
+
+    async def _async_process_config(
+        self,
+        user_input,
+        *,
+        step_id: str,
+        expected_mac: str | None = None,
+    ):
+        """Validate credentials and create a config entry."""
+        errors = {}
+        if user_input[CONF_NAME] in configured_instances(self.hass):
+            errors["base"] = "name_exists"
+
+        switch_info, validation_error = await self._async_validate_switch(user_input)
+        if validation_error:
+            errors["base"] = validation_error
+        elif (
+            switch_info
+            and switch_info.mac
+            and expected_mac
+            and format_mac(switch_info.mac) != format_mac(expected_mac)
+        ):
+            errors["base"] = "wrong_device"
+
+        if not errors and switch_info and switch_info.mac:
+            await self.async_set_unique_id(format_mac(switch_info.mac))
+            self._abort_if_unique_id_configured(
+                updates={CONF_HOST: user_input[CONF_HOST]}
+            )
+            return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
+
+        return self._show_config_form(
+            step_id=step_id, user_input=user_input, errors=errors
+        )
+
+    @staticmethod
+    def _default_config():
+        """Return defaults for manual configuration."""
+        return {
+            CONF_NAME: DEFAULT_NAME,
+            CONF_HOST: DEFAULT_HOST,
+            CONF_USERNAME: DEFAULT_USER,
+            CONF_PASSWORD: DEFAULT_PASS,
+            CONF_PORT: DEFAULT_PORT,
+            CONF_SSL: DEFAULT_SSL,
+            CONF_VERIFY_SSL: DEFAULT_VERIFY_SSL,
+        }
+
+    def _show_discovery_form(self):
+        """Show switches found by the read-only ESCP scan."""
+        choices = {
+            mac: f"{device.model} — {device.name} — {device.host} ({mac})"
+            for mac, device in self._discovered_switches.items()
+        }
+        choices[_MANUAL_CONFIGURATION] = "Manual configuration"
+        return self.async_show_form(
+            step_id="discovery",
+            data_schema=vol.Schema(
+                {vol.Required(_CONF_DISCOVERED_DEVICE): vol.In(choices)}
+            ),
         )
 
     async def async_step_reconfigure(self, user_input=None):

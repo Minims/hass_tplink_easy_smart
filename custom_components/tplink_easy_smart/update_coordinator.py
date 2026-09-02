@@ -17,6 +17,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -375,6 +376,7 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         result = DeviceInfo(
             configuration_url=self._api.device_url,
+            connections={(dr.CONNECTION_NETWORK_MAC, switch_info.mac)},
             identifiers={(DOMAIN, switch_info.mac)},
             manufacturer=ATTR_MANUFACTURER,
             name=switch_info.name,

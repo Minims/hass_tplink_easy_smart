@@ -14,11 +14,12 @@ Smart switches through their embedded web interface.
 
 Monitoring:
 
-- Switch identity, network, hardware, and firmware information.
+- Automatic local discovery through the credential-free ESCP discovery request.
+- Switch identity, MAC connection, network, hardware, and firmware information.
 - Administrative state, link state, speed/duplex, and flow control per port.
 - Exact TX/RX good and bad packet counters.
 - Estimated TX, RX, and combined traffic rates.
-- Cable-test status and fault distance.
+- Per-port cable-test buttons, status, and fault distance.
 - PoE state, power measurements, priorities, and limits when supported.
 
 Configuration:
@@ -44,17 +45,23 @@ in one asynchronous client, coordinator, and switch login session.
 
 ## Compatibility
 
-| Model | Revision | Status | Notes |
+| Model | Revision | Validation status | Notes |
 |---|---:|:---:|---|
-| [TL-SG105E](https://www.tp-link.com/en/business-networking/easy-smart-switch/tl-sg105e/) | V5 | Target | Protocol verified against firmware `1.0.0 Build 20250710 Rel.71066`; no PoE |
-| [TL-SG1016PE](https://www.tp-link.com/en/business-networking/poe-switch/tl-sg1016pe/) | V1, V3 | Supported | Existing integration support, including PoE; advanced pages depend on firmware |
-| [TL-SG108E](https://www.tp-link.com/en/business-networking/easy-smart-switch/tl-sg108e/) | V6 | Reported | Core monitoring supported; advanced pages depend on firmware |
-| Other Easy Smart models using the same web UI | — | Best effort | Unsupported pages are skipped; compatibility reports are welcome |
+| [TL-SG105E](https://www.tp-link.com/en/business-networking/easy-smart-switch/tl-sg105e/) | V5 | Discovery verified | ESCP discovery was validated on firmware `1.0.0 Build 20250710 Rel.71066`; CGI paths and forms were reviewed in the same firmware; full Home Assistant validation is pending; no PoE |
+| [TL-SG1016PE](https://www.tp-link.com/en/business-networking/poe-switch/tl-sg1016pe/) | V1, V3 | Previously confirmed | Core monitoring, port control, and PoE were confirmed by the upstream integration; the new advanced actions have not been revalidated |
+| [TL-SG108E](https://www.tp-link.com/en/business-networking/easy-smart-switch/tl-sg108e/) | V6 | Previously confirmed | Network information and port status were confirmed by the upstream integration; configuration actions have not been revalidated |
+| Other Easy Smart models using the same legacy web UI | — | Untested | They may work through runtime capability detection, but compatibility is not guaranteed |
 
-The 20250710 TL-SG105E V5 firmware image was inspected to verify the CGI paths,
-form field names, limits, and cable-test delay handling. A first installation
-should still be tested on a non-critical port before automating configuration
-writes.
+These labels distinguish physical-device reports from static firmware analysis.
+Automated tests use simulated switch responses and do not establish hardware
+compatibility by themselves.
+
+ESCP discovery was tested successfully on a physical TL-SG105E V5 running the
+20250710 firmware. Its firmware image was also statically inspected to map CGI
+paths, form field names, limits, and the cable-test delay. This reduces
+integration risk but does not validate every monitoring and configuration path.
+Perform the first configuration writes on a non-critical port and keep an
+independent management path available.
 
 ## Installation
 
@@ -65,6 +72,11 @@ writes.
 3. Install **TP-Link Easy Smart** and restart Home Assistant.
 4. Open **Settings > Devices & services > Add integration** and select
    **TP-Link Easy Smart**.
+
+Setup scans the enabled local IPv4 broadcast domains for Easy Smart switches.
+Select a discovered device and enter its credentials, or choose manual
+configuration. Discovery uses UDP ports `29808` and `29809`, does not transmit
+credentials, and normally does not cross routers or VLAN boundaries.
 
 ### Manual
 
@@ -87,13 +99,12 @@ the entry to a different switch.
 |---|---:|
 | Update interval | 30 seconds |
 | Assumed packet size used for rate estimates | 1500 bytes |
-| [Port state switches](docs/controls.md#port-state) | Disabled |
-| [Port PoE state switches](docs/controls.md#port-poe-state) | Disabled |
+| [Port state switches](docs/controls.md#port-state) | Enabled |
+| [Port PoE state switches](docs/controls.md#port-poe-state) | Enabled |
 
-Good-packet counters are enabled by default. Bad-packet counters, estimated
-rates, cable diagnostics, speed/duplex selects, flow-control switches, and
-per-port QoS priority selects are created disabled by default. Enable only the
-entities you need from the entity registry.
+Good-packet counters, estimated rates, cable diagnostics, and all available
+configuration entities are enabled by default. Bad-packet counters remain
+disabled by default and can be enabled from the entity registry.
 
 ## Traffic-rate accuracy
 
@@ -110,11 +121,12 @@ rate. Raw packet counters remain the exact values reported by the switch.
 
 ## Network safety
 
-VLAN, LAG, mirroring, port-state, and rate-limit changes can interrupt the Home
-Assistant management path. In particular, enabling one VLAN mode disables the
-other mutually exclusive VLAN modes and may clear their configuration. The
-integration validates known device limits and automatically expands LAG member
-changes, but it cannot determine your intended management topology.
+VLAN, LAG, mirroring, port-state, cable-test, and rate-limit operations can
+interrupt traffic or the Home Assistant management path. In particular,
+enabling one VLAN mode disables the other mutually exclusive VLAN modes and may
+clear their configuration. The integration validates known device limits and
+automatically expands LAG member changes, but it cannot determine your intended
+management topology.
 
 The integration deliberately does not expose firmware upgrade, factory reset,
 reboot, switch IP configuration, or account-password changes.
@@ -127,8 +139,8 @@ reboot, switch IP configuration, or account-password changes.
 
 ## Versioning
 
-Releases use Home Assistant-style calendar versions: `YYYY.M.patch`. The first
-release of this merged feature set is `2026.9.0`.
+Releases use Home Assistant-style calendar versions: `YYYY.M.patch`. The merged
+feature set starts at `2026.9.0`.
 
 ## Development
 

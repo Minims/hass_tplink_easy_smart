@@ -5,6 +5,9 @@
     "@Minims"
   ],
   "config_flow": true,
+  "dependencies": [
+    "network"
+  ],
   "documentation": "https://github.com/Minims/hass_tplink_easy_smart",
   "integration_type": "device",
   "iot_class": "local_polling",
@@ -12,5 +15,5 @@
   "requirements": [
     "json5==0.15.0"
   ],
-  "version": "2026.9.0"
+  "version": "2026.9.1"
 }

@@ -13,6 +13,26 @@
           "verify_ssl": "Vérifier le certificat SSL"
         }
       },
+      "discovery": {
+        "title": "Switches Easy Smart détectés",
+        "description": "Sélectionnez un switch détecté sur le réseau local ou continuez avec la configuration manuelle.",
+        "data": {
+          "device": "Switch"
+        }
+      },
+      "discovery_credentials": {
+        "title": "Connexion au switch détecté",
+        "description": "Confirmez les paramètres de connexion et saisissez les identifiants du switch.",
+        "data": {
+          "name": "Nom de l’intégration",
+          "host": "Hôte",
+          "port": "Port",
+          "username": "Nom d’utilisateur",
+          "password": "Mot de passe",
+          "ssl": "Utiliser SSL",
+          "verify_ssl": "Vérifier le certificat SSL"
+        }
+      },
       "reconfigure": {
         "description": "Modifiez les paramètres de connexion du switch TP-Link Easy Smart.",
         "data": {

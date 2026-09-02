@@ -1087,7 +1087,7 @@ wheels = [
 
 [[package]]
 name = "hass-tplink-easy-smart-dev"
-version = "2026.9.0"
+version = "2026.9.1"
 source = { virtual = "." }
 dependencies = [
     { name = "aiohttp" },

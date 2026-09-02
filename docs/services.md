@@ -31,7 +31,8 @@ lists use one-based physical port numbers, for example `[1, 2]`.
 ### Cable diagnostic
 
 The selected link can be interrupted briefly while TDR runs. Results are
-published to the disabled-by-default cable sensors.
+published to the enabled-by-default cable sensors. The same diagnostic can be
+started from `button.<integration_name>_port_<n>_cable_test`.
 
 ```yaml
 action: tplink_easy_smart.run_cable_diagnostic

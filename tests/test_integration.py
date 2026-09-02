@@ -12,6 +12,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.tplink_easy_smart.client.classes import (
@@ -26,11 +27,7 @@ from custom_components.tplink_easy_smart.client.classes import (
     QosState,
     TpLinkSystemInfo,
 )
-from custom_components.tplink_easy_smart.const import (
-    DATA_KEY_COORDINATOR,
-    DOMAIN,
-    OPT_PORT_STATE_SWITCHES,
-)
+from custom_components.tplink_easy_smart.const import DATA_KEY_COORDINATOR, DOMAIN
 from custom_components.tplink_easy_smart.services import ServiceNames
 
 
@@ -43,6 +40,7 @@ class FakeTpLinkApi:
         type(self).instance = self
         self.poe_limit: float | None = None
         self.igmp_setting: tuple[bool, bool] | None = None
+        self.cable_test_ports: list[int] = []
         self.session = kwargs.get("session")
 
     @property
@@ -97,6 +95,10 @@ class FakeTpLinkApi:
     async def get_cable_diagnostics(self) -> list[CableDiagnostic]:
         return [CableDiagnostic(number=1, status=CableStatus.NORMAL, length_m=12)]
 
+    async def run_cable_diagnostic(self, port_number: int) -> list[CableDiagnostic]:
+        self.cable_test_ports.append(port_number)
+        return [CableDiagnostic(number=1, status=CableStatus.NORMAL, length_m=12)]
+
     async def get_qos(self) -> QosState:
         return QosState(
             mode=QosMode.PORT_BASED,
@@ -145,7 +147,7 @@ async def test_setup_entities_and_general_poe_service(
             CONF_USERNAME: "admin",
             CONF_PASSWORD: "secret",
         },
-        options={OPT_PORT_STATE_SWITCHES: True},
+        options={},
         version=2,
     )
     entry.add_to_hass(hass)
@@ -157,9 +159,27 @@ async def test_setup_entities_and_general_poe_service(
     assert hass.states.get("sensor.test_switch_port_1_rx_good_packets").state == "200"
     assert hass.states.get("binary_sensor.test_switch_port_1_state").state == "on"
     assert hass.states.get("switch.test_switch_port_1_enabled").state == "on"
+    assert hass.states.get("switch.test_switch_port_1_flow_control").state == "on"
     assert hass.states.get("switch.test_switch_igmp_snooping").state == "on"
+    assert hass.states.get("switch.test_switch_igmp_report_suppression").state == "off"
     assert hass.states.get("switch.test_switch_loop_prevention").state == "on"
+    assert hass.states.get("select.test_switch_port_1_speed_and_duplex").state == "Auto"
     assert hass.states.get("select.test_switch_qos_mode").state == "Port based"
+    assert (
+        hass.states.get("select.test_switch_port_1_qos_priority").state == "2 (Normal)"
+    )
+    assert hass.states.get("sensor.test_switch_port_1_tx_estimated_bandwidth")
+    assert hass.states.get("sensor.test_switch_port_1_rx_estimated_bandwidth")
+    assert hass.states.get("sensor.test_switch_port_1_estimated_bandwidth")
+    assert hass.states.get("sensor.test_switch_port_1_cable_status").state == "normal"
+    assert hass.states.get("sensor.test_switch_port_1_cable_length").state == "12"
+    assert hass.states.get("button.test_switch_port_1_cable_test")
+
+    device = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, "AA:BB:CC:DD:EE:FF")}
+    )
+    assert device is not None
+    assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
 
     coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
     assert coordinator.config_entry is entry
@@ -193,6 +213,14 @@ async def test_setup_entities_and_general_poe_service(
     )
 
     assert FakeTpLinkApi.instance.igmp_setting == (False, True)
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.test_switch_port_1_cable_test"},
+        blocking=True,
+    )
+    assert FakeTpLinkApi.instance.cable_test_ports == [1]
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.entry_id not in hass.data[DOMAIN]
