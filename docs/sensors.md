@@ -78,6 +78,9 @@ reported as off; the entity becomes unavailable only when data cannot be read.
 | `flow_control_actual` | Negotiated flow-control state |
 | `speed` | Current connection speed |
 | `speed_config` | Configured connection speed |
+| `tx_estimated_bandwidth_mbps` | Estimated transmit rate in Mbps |
+| `rx_estimated_bandwidth_mbps` | Estimated receive rate in Mbps |
+| `total_estimated_bandwidth_mbps` | Combined estimated rate in Mbps |
 
 Possible speed values are `Link Down`, `Auto`, `10MH`, `10MF`, `100MH`,
 `100MF`, and `1000MF`.

@@ -179,6 +179,7 @@ class TpLinkPortStateBinarySensor(TpLinkBinarySensor):
     @callback
     def _handle_coordinator_update(self) -> None:
         port_info = self.coordinator.get_port_state(self._port_number)
+        traffic_rates = self.coordinator.get_port_traffic_rates(self._port_number)
 
         if port_info:
             self._attr_available = True
@@ -200,6 +201,15 @@ class TpLinkPortStateBinarySensor(TpLinkBinarySensor):
             )
             self._attr_extra_state_attributes["speed_config"] = (
                 DISPLAYED_PORT_SPEED.get(port_info.speed_config)
+            )
+            self._attr_extra_state_attributes["tx_estimated_bandwidth_mbps"] = (
+                round(traffic_rates.tx_estimated_mbps, 6) if traffic_rates else None
+            )
+            self._attr_extra_state_attributes["rx_estimated_bandwidth_mbps"] = (
+                round(traffic_rates.rx_estimated_mbps, 6) if traffic_rates else None
+            )
+            self._attr_extra_state_attributes["total_estimated_bandwidth_mbps"] = (
+                round(traffic_rates.total_estimated_mbps, 6) if traffic_rates else None
             )
         else:
             self._attr_available = False

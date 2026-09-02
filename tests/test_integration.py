@@ -25,6 +25,7 @@ from custom_components.tplink_easy_smart.client.classes import (
     PortSpeed,
     PortState,
     PortStatistics,
+    PortTrafficRates,
     QosMode,
     QosState,
     TpLinkSystemInfo,
@@ -264,6 +265,20 @@ async def test_setup_entities_and_general_poe_service(
 
     coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
     assert coordinator.config_entry is entry
+    coordinator._port_traffic_rates[1] = PortTrafficRates(
+        tx_packets_per_second=10,
+        rx_packets_per_second=20,
+        tx_estimated_mbps=0.12345678,
+        rx_estimated_mbps=0.2,
+    )
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+    port_attributes = hass.states.get(
+        "binary_sensor.test_switch_port_1_state"
+    ).attributes
+    assert port_attributes["tx_estimated_bandwidth_mbps"] == 0.123457
+    assert port_attributes["rx_estimated_bandwidth_mbps"] == 0.2
+    assert port_attributes["total_estimated_bandwidth_mbps"] == 0.323457
 
     async def fail_igmp_poll() -> IgmpSnoopingState:
         raise RuntimeError("temporary IGMP polling failure")

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.4
+
+- Add estimated TX, RX and combined bandwidth in Mbps to every port-state
+  binary sensor's attributes, while retaining the dedicated metric sensors for
+  history, graphs and automations.
+
 ## 2026.9.3
 
 - Always create cable-test buttons and diagnostic sensors for every physical
