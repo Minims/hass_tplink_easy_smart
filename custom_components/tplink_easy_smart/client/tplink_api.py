@@ -497,8 +497,8 @@ class TpLinkApi:
 
     async def run_cable_diagnostic(self, port_number: int) -> list[CableDiagnostic]:
         """Run a cable test on one port and return the latest cached results."""
-        diagnostics = await self.get_cable_diagnostics()
-        _validate_ports([port_number], len(diagnostics), allow_empty=False)
+        if port_number < 1:
+            raise ActionError("Port number must be greater than or equal to 1")
         response = await self._apply_get(
             URL_CABLE_DIAGNOSTICS_SET,
             _query({f"chk_{port_number}": port_number, "Apply": "Apply"}),

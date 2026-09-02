@@ -103,8 +103,8 @@ Possible power statuses include `On`, `Off`, `Turning on`, `Overload`, `Short`,
 
 ## Cable diagnostics
 
-When the firmware exposes its cable-test page, the integration creates two
-diagnostic sensors per port, enabled by default:
+The integration creates two diagnostic sensors per detected physical port,
+enabled by default:
 
 | Entity suffix | Value |
 |---|---|
@@ -113,5 +113,6 @@ diagnostic sensors per port, enabled by default:
 
 Press `button.<integration_name>_port_<n>_cable_test` or call
 `tplink_easy_smart.run_cable_diagnostic` to run the TDR test and refresh these
-values. Testing can briefly interrupt the selected port. The integration uses
+values. A sensor remains unavailable until the firmware returns a diagnostic
+result. Testing can briefly interrupt the selected port. The integration uses
 the delay returned by the firmware before reading the result.

@@ -41,11 +41,8 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up cable-test buttons when the firmware exposes diagnostics."""
+    """Set up cable-test buttons for every physical port."""
     coordinator = get_coordinator(hass, config_entry)
-    if not coordinator.cable_diagnostics_supported:
-        return
-
     device_name = coordinator.get_switch_info().name
     async_add_entities(
         TpLinkCableTestButton(

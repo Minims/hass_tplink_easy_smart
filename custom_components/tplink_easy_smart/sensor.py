@@ -224,43 +224,42 @@ async def async_setup_entry(
                 )
             )
 
-    if coordinator.cable_diagnostics_supported:
-        for port_number in range(1, coordinator.ports_count + 1):
-            sensors.extend(
-                (
-                    TpLinkCableDiagnosticSensor(
-                        coordinator,
-                        TpLinkCableSensorEntityDescription(
-                            key=f"port_{port_number}_cable_status",
-                            icon="mdi:ethernet-cable",
-                            entity_category=EntityCategory.DIAGNOSTIC,
-                            entity_registry_enabled_default=True,
-                            device_name=coordinator.get_switch_info().name,
-                            function_uid=f"port_{port_number}_cable_status",
-                            function_name=f"Port {port_number} cable status",
-                            port_number=port_number,
-                            value_kind="status",
-                        ),
+    for port_number in range(1, coordinator.ports_count + 1):
+        sensors.extend(
+            (
+                TpLinkCableDiagnosticSensor(
+                    coordinator,
+                    TpLinkCableSensorEntityDescription(
+                        key=f"port_{port_number}_cable_status",
+                        icon="mdi:ethernet-cable",
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                        entity_registry_enabled_default=True,
+                        device_name=coordinator.get_switch_info().name,
+                        function_uid=f"port_{port_number}_cable_status",
+                        function_name=f"Port {port_number} cable status",
+                        port_number=port_number,
+                        value_kind="status",
                     ),
-                    TpLinkCableDiagnosticSensor(
-                        coordinator,
-                        TpLinkCableSensorEntityDescription(
-                            key=f"port_{port_number}_cable_length",
-                            icon="mdi:tape-measure",
-                            device_class=SensorDeviceClass.DISTANCE,
-                            native_unit_of_measurement=UnitOfLength.METERS,
-                            state_class=SensorStateClass.MEASUREMENT,
-                            entity_category=EntityCategory.DIAGNOSTIC,
-                            entity_registry_enabled_default=True,
-                            device_name=coordinator.get_switch_info().name,
-                            function_uid=f"port_{port_number}_cable_length",
-                            function_name=f"Port {port_number} cable length",
-                            port_number=port_number,
-                            value_kind="length",
-                        ),
+                ),
+                TpLinkCableDiagnosticSensor(
+                    coordinator,
+                    TpLinkCableSensorEntityDescription(
+                        key=f"port_{port_number}_cable_length",
+                        icon="mdi:tape-measure",
+                        device_class=SensorDeviceClass.DISTANCE,
+                        native_unit_of_measurement=UnitOfLength.METERS,
+                        state_class=SensorStateClass.MEASUREMENT,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                        entity_registry_enabled_default=True,
+                        device_name=coordinator.get_switch_info().name,
+                        function_uid=f"port_{port_number}_cable_length",
+                        function_name=f"Port {port_number} cable length",
+                        port_number=port_number,
+                        value_kind="length",
                     ),
-                )
+                ),
             )
+        )
 
     async_add_entities(sensors)
 

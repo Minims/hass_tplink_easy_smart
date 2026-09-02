@@ -63,6 +63,10 @@ refreshed when the test completes. The
 `tplink_easy_smart.run_cable_diagnostic` action remains available for
 automations.
 
+The integration creates one button for every detected physical port. This
+allows a first test to be started even when the switch did not return cached
+diagnostic values during startup.
+
 A cable test can briefly interrupt the selected link. Do not run it on the Home
 Assistant management path unless an independent route to the switch is
 available.

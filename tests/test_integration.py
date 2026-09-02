@@ -29,6 +29,7 @@ from custom_components.tplink_easy_smart.client.classes import (
     QosState,
     TpLinkSystemInfo,
 )
+from custom_components.tplink_easy_smart.client.tplink_api import DataFormatError
 from custom_components.tplink_easy_smart.const import DATA_KEY_COORDINATOR, DOMAIN
 from custom_components.tplink_easy_smart.services import ServiceNames
 
@@ -127,6 +128,13 @@ class FakeTpLinkApi:
         if self.session is not None and not self.session.closed:
             self.session.detach()
         return None
+
+
+class InitialCableProbeFailureApi(FakeTpLinkApi):
+    """Fail the startup probe but allow a user-triggered cable test."""
+
+    async def get_cable_diagnostics(self) -> list[CableDiagnostic]:
+        raise DataFormatError("Cable diagnostics are not initialized")
 
 
 async def test_migration_enables_new_defaults_on_every_port(
@@ -298,3 +306,47 @@ async def test_setup_entities_and_general_poe_service(
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.entry_id not in hass.data[DOMAIN]
     assert not hass.services.has_service(DOMAIN, ServiceNames.SET_GENERAL_POE_LIMIT)
+
+
+async def test_cable_button_exists_when_initial_probe_fails(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """Expose cable diagnostics so the first button press can initialize them."""
+    monkeypatch.setattr(
+        "custom_components.tplink_easy_smart.update_coordinator.TpLinkApi",
+        InitialCableProbeFailureApi,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Switch",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={
+            CONF_NAME: "Test Switch",
+            CONF_HOST: "192.0.2.1",
+            CONF_PORT: 80,
+            CONF_SSL: False,
+            CONF_VERIFY_SSL: False,
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret",
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    button_id = "button.test_switch_port_1_cable_test"
+    status_id = "sensor.test_switch_port_1_cable_status"
+    length_id = "sensor.test_switch_port_1_cable_length"
+    assert hass.states.get(button_id) is not None
+    assert hass.states.get(status_id).state == "unavailable"
+    assert hass.states.get(length_id).state == "unavailable"
+
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button_id}, blocking=True
+    )
+    assert hass.states.get(status_id).state == "normal"
+    assert hass.states.get(length_id).state == "12"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)

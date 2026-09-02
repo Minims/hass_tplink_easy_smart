@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.9.3
+
+- Always create cable-test buttons and diagnostic sensors for every physical
+  port, allowing a first test to recover when the initial capability probe
+  fails or returns incomplete data.
+- Validate cable-test port numbers against the coordinator's detected ports.
+
 ## 2026.9.2
 
 - Re-enable every existing entity whose default changed in 2026.9.1, including

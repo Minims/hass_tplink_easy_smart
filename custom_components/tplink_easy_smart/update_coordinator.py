@@ -181,11 +181,6 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return self._loop_prevention_supported is True
 
     @property
-    def cable_diagnostics_supported(self) -> bool:
-        """Return whether the switch exposed cable diagnostics."""
-        return self._cable_diagnostics_supported is True
-
-    @property
     def qos_supported(self) -> bool:
         """Return whether the switch exposed QoS settings."""
         return self._qos_supported is True
@@ -422,6 +417,8 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     async def async_run_cable_diagnostic(self, port_number: int) -> None:
         """Run one cable test and publish its latest results."""
+        if self.get_port_state(port_number) is None:
+            raise ValueError(f"Port number must be between 1 and {self.ports_count}")
         self._cable_diagnostics = await self._api.run_cable_diagnostic(port_number)
         self._cable_diagnostics_supported = True
         self.async_update_listeners()
