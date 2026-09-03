@@ -148,13 +148,26 @@ def _get_variables(page: str | None) -> dict[str, str]:
 #   _to_array
 # ---------------------------
 def _to_list(array_data: str) -> Iterable[str]:
-    match = _ARRAY_VALUES_REGEX.fullmatch(array_data)
-    if not match:
+    """Parse the constructor and literal array forms used by Easy Smart pages."""
+    constructor_match = _ARRAY_VALUES_REGEX.fullmatch(array_data)
+    if constructor_match:
+        array_items = constructor_match.group("items")
+        if array_items:
+            for item in array_items.split(","):
+                yield item.strip(" ,\r\n\t\"'")
         return
-    array_items = match.group("items")
-    if array_items:
-        for item in array_items.split(","):
-            yield item.strip(" ,\r\n\t\"'")
+
+    try:
+        literal_items = json5.loads(array_data)
+    except (TypeError, ValueError):
+        return
+    if not isinstance(literal_items, list):
+        return
+    for item in literal_items:
+        if isinstance(item, str):
+            yield item
+        elif item is not None:
+            yield str(item)
 
 
 # ---------------------------

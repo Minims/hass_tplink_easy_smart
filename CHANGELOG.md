@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.9.7
+
+- Fix cable diagnostics on TL-SG105E V5 firmware 20250710 by parsing the
+  JavaScript array literals used for `cablestate` and `cablelength`.
+- Apply the same parser fix to QoS, bandwidth-control, storm-control and port
+  mirroring pages that may use literal arrays.
+
 ## 2026.9.6
 
 - Fix LED-state parsing for firmware pages that separate JavaScript variables

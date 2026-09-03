@@ -1,5 +1,6 @@
 """Tests for Easy Smart configuration parsing and write requests."""
 
+from unittest.mock import AsyncMock
 from urllib.parse import parse_qs
 
 import pytest
@@ -9,6 +10,7 @@ from custom_components.tplink_easy_smart.client.coreapi import (
     APICALL_ERRCAT_DISCONNECTED,
     APICALL_ERRCODE_DISCONNECTED,
     ApiCallError,
+    TpLinkWebApi,
 )
 from custom_components.tplink_easy_smart.client.tplink_api import ActionError, TpLinkApi
 
@@ -239,6 +241,33 @@ async def test_cable_diagnostic_uses_firmware_checkbox_fields(monkeypatch) -> No
     path, query = core.get_calls[-1]
     assert path == "cable_diag_get.cgi"
     assert parse_qs(query) == {"chk_3": ["3"], "Apply": ["Apply"]}
+
+
+async def test_cable_diagnostics_parse_firmware_literal_arrays() -> None:
+    """Read the exact literal-array shape emitted by TL-SG105E V5 firmware."""
+    api, _core = _api(_configuration_pages())
+    web_api = TpLinkWebApi("192.0.2.1", 80, False, "admin", "secret", False)
+    web_api.get = AsyncMock(
+        return_value="""
+        <script>
+        var maxPort=5;
+        var cablestate=[-1,1,2,3,0];
+        var cablelength=[-1,12,20,4,0];
+        </script>
+        """
+    )
+    api._core_api = web_api
+
+    cables = await api.get_cable_diagnostics()
+
+    assert [cable.status.name for cable in cables] == [
+        "NOT_TESTED",
+        "NORMAL",
+        "OPEN",
+        "SHORT",
+        "NO_CABLE",
+    ]
+    assert [cable.length_m for cable in cables] == [None, 12, 20, 4, 0]
 
 
 async def test_led_and_reboot_use_firmware_forms() -> None:

@@ -53,10 +53,44 @@ def test_convert_firmware_values() -> None:
         "0",
         "session",
     ]
+    assert _convert_value("[-1, 1, 2, 3, 0]", VariableType.List) == [
+        "-1",
+        "1",
+        "2",
+        "3",
+        "0",
+    ]
     assert _convert_value("{state:[1,0], trailing:true,}", VariableType.Dict) == {
         "state": [1, 0],
         "trailing": True,
     }
+
+
+def test_convert_cable_diagnostics_from_firmware_page() -> None:
+    """Parse the array literals emitted by TL-SG105E V5 firmware 20250710."""
+    page = """
+    <script>
+      var maxPort=5;
+      var cablestate=[-1,1,2,3,0];
+      var cablelength=[-1,12,20,4,0];
+    </script>
+    """
+    variables = _get_variables(page)
+
+    assert _convert_value(variables["cablestate"], VariableType.List) == [
+        "-1",
+        "1",
+        "2",
+        "3",
+        "0",
+    ]
+    assert _convert_value(variables["cablelength"], VariableType.List) == [
+        "-1",
+        "12",
+        "20",
+        "4",
+        "0",
+    ]
 
 
 def test_get_variables_handles_missing_page() -> None:
