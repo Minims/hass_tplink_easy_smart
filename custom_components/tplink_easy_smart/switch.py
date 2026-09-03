@@ -44,6 +44,8 @@ _FUNCTION_DISPLAYED_NAME_IGMP_SUPPRESSION: Final = "IGMP report suppression"
 _FUNCTION_UID_IGMP_SUPPRESSION: Final = "igmp_report_suppression"
 _FUNCTION_DISPLAYED_NAME_LOOP_PREVENTION: Final = "Loop prevention"
 _FUNCTION_UID_LOOP_PREVENTION: Final = "loop_prevention"
+_FUNCTION_DISPLAYED_NAME_LED: Final = "LEDs"
+_FUNCTION_UID_LED: Final = "leds"
 
 ENTITY_DOMAIN: Final = "switch"
 
@@ -123,6 +125,21 @@ async def async_setup_entry(
                     function_name=_FUNCTION_DISPLAYED_NAME_PORT_FLOW_CONTROL_FORMAT.format(
                         port_number
                     ),
+                ),
+            )
+        )
+
+    if coordinator.led_supported:
+        sensors.append(
+            TpLinkLedSwitch(
+                coordinator,
+                TpLinkSwitchEntityDescription(
+                    key="leds",
+                    icon="mdi:led-on",
+                    entity_registry_enabled_default=True,
+                    device_name=coordinator.get_switch_info().name,
+                    function_uid=_FUNCTION_UID_LED,
+                    function_name=_FUNCTION_DISPLAYED_NAME_LED,
                 ),
             )
         )
@@ -357,6 +374,18 @@ class TpLinkLoopPreventionSwitch(TpLinkSwitch):
     def _handle_coordinator_update(self) -> None:
         info = self.coordinator.get_loop_prevention_state()
         self._attr_is_on = info.enabled if info else None
+        super()._handle_coordinator_update()
+
+
+class TpLinkLedSwitch(TpLinkSwitch):
+    """Control the switch's front-panel LEDs."""
+
+    async def _go_to_state(self, state: bool) -> None:
+        await self.coordinator.async_set_led_state(state)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._attr_is_on = self.coordinator.get_led_state()
         super()._handle_coordinator_update()
 
 

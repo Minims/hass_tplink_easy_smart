@@ -233,6 +233,18 @@ class Vlan8021QState:
 
 
 @dataclass
+class VlanPvidState:
+    """Per-port IEEE 802.1Q PVID configuration."""
+
+    enabled: bool
+    port_count: int
+    pvids: list[int]
+    vlan_ids: list[int]
+    member_masks: list[int]
+    trunk_groups: list[int]
+
+
+@dataclass
 class QosState:
     """QoS mode and per-port priority configuration."""
 

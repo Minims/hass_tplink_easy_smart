@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026.9.5
+
+- Add an enabled-by-default front-panel LED switch and reboot button using the
+  exact forms verified in TL-SG105E V5 firmware
+  `1.0.0 Build 20250710 Rel.71066`.
+- Add enabled-by-default diagnostic summaries for empty or configured LAGs,
+  MTU VLAN, port VLAN, 802.1Q VLAN and per-port PVID values.
+- Add a direct **Open HACS repository** button to the installation guide.
+- Keep statistics, estimated-bandwidth, IGMP, loop-prevention and QoS entities
+  available for automatic recovery after a transient initial probe failure.
+- Fail and retry integration setup when the core port-state read fails instead
+  of completing setup without any per-port entities.
+- Clarify negotiated speed, estimated-bandwidth attributes, cable diagnostics,
+  entity defaults and post-upgrade behavior in the README.
+
 ## 2026.9.4
 
 - Add estimated TX, RX and combined bandwidth in Mbps to every port-state

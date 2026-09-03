@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pytest
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -14,6 +15,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.tplink_easy_smart import async_migrate_entry
@@ -21,18 +23,28 @@ from custom_components.tplink_easy_smart.client.classes import (
     CableDiagnostic,
     CableStatus,
     IgmpSnoopingState,
+    LagState,
     LoopPreventionState,
+    MtuVlanState,
     PortSpeed,
     PortState,
     PortStatistics,
     PortTrafficRates,
+    PortVlan,
+    PortVlanState,
     QosMode,
     QosState,
     TpLinkSystemInfo,
+    Vlan8021Q,
+    Vlan8021QState,
+    VlanPvidState,
 )
 from custom_components.tplink_easy_smart.client.tplink_api import DataFormatError
 from custom_components.tplink_easy_smart.const import DATA_KEY_COORDINATOR, DOMAIN
 from custom_components.tplink_easy_smart.services import ServiceNames
+from custom_components.tplink_easy_smart.update_coordinator import (
+    TpLinkDataUpdateCoordinator,
+)
 
 
 class FakeTpLinkApi:
@@ -44,6 +56,8 @@ class FakeTpLinkApi:
         type(self).instance = self
         self.poe_limit: float | None = None
         self.igmp_setting: tuple[bool, bool] | None = None
+        self.led_setting: bool | None = None
+        self.reboot_calls = 0
         self.cable_test_ports: list[int] = []
         self.session = kwargs.get("session")
 
@@ -87,6 +101,54 @@ class FakeTpLinkApi:
             )
         ]
 
+    async def get_led_state(self) -> bool:
+        return True if self.led_setting is None else self.led_setting
+
+    async def get_lags(self) -> LagState:
+        return LagState(
+            max_groups=1,
+            port_count=1,
+            ports_per_group=1,
+            groups={1: []},
+        )
+
+    async def get_mtu_vlan(self) -> MtuVlanState:
+        return MtuVlanState(enabled=False, port_count=1, uplink_port=1)
+
+    async def get_port_vlans(self) -> PortVlanState:
+        return PortVlanState(
+            enabled=False,
+            port_count=1,
+            vlans=[PortVlan(vlan_id=1, member_ports=[1])],
+            trunk_groups=[0],
+        )
+
+    async def get_8021q_vlans(self) -> Vlan8021QState:
+        return Vlan8021QState(
+            enabled=False,
+            port_count=1,
+            max_vlans=32,
+            vlans=[
+                Vlan8021Q(
+                    vlan_id=1,
+                    name="Default",
+                    tagged_ports=[],
+                    untagged_ports=[1],
+                )
+            ],
+            trunk_groups=[0],
+        )
+
+    async def get_pvids(self) -> VlanPvidState:
+        return VlanPvidState(
+            enabled=False,
+            port_count=1,
+            pvids=[1],
+            vlan_ids=[1],
+            member_masks=[1],
+            trunk_groups=[0],
+        )
+
     async def is_feature_available(self, _feature: str) -> bool:
         return False
 
@@ -125,10 +187,15 @@ class FakeTpLinkApi:
     async def set_igmp_snooping(self, enabled: bool, report_suppression: bool) -> None:
         self.igmp_setting = (enabled, report_suppression)
 
+    async def set_led_state(self, enabled: bool) -> None:
+        self.led_setting = enabled
+
+    async def reboot(self) -> None:
+        self.reboot_calls += 1
+
     async def disconnect(self) -> None:
         if self.session is not None and not self.session.closed:
             self.session.detach()
-        return None
 
 
 class InitialCableProbeFailureApi(FakeTpLinkApi):
@@ -136,6 +203,48 @@ class InitialCableProbeFailureApi(FakeTpLinkApi):
 
     async def get_cable_diagnostics(self) -> list[CableDiagnostic]:
         raise DataFormatError("Cable diagnostics are not initialized")
+
+
+class InitialOptionalProbeFailureApi(FakeTpLinkApi):
+    """Fail optional startup reads once, then recover on the next update."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.statistics_calls = 0
+        self.igmp_calls = 0
+        self.loop_prevention_calls = 0
+        self.qos_calls = 0
+
+    async def get_port_statistics(self) -> list[PortStatistics]:
+        self.statistics_calls += 1
+        if self.statistics_calls == 1:
+            raise RuntimeError("temporary statistics failure")
+        return await super().get_port_statistics()
+
+    async def get_igmp_snooping(self) -> IgmpSnoopingState:
+        self.igmp_calls += 1
+        if self.igmp_calls == 1:
+            raise RuntimeError("temporary IGMP failure")
+        return await super().get_igmp_snooping()
+
+    async def get_loop_prevention(self) -> LoopPreventionState:
+        self.loop_prevention_calls += 1
+        if self.loop_prevention_calls == 1:
+            raise RuntimeError("temporary loop-prevention failure")
+        return await super().get_loop_prevention()
+
+    async def get_qos(self) -> QosState:
+        self.qos_calls += 1
+        if self.qos_calls == 1:
+            raise RuntimeError("temporary QoS failure")
+        return await super().get_qos()
+
+
+class PortStateFailureApi(FakeTpLinkApi):
+    """Fail the core port-state read."""
+
+    async def get_port_states(self) -> list[PortState]:
+        raise RuntimeError("temporary port-state failure")
 
 
 async def test_migration_enables_new_defaults_on_every_port(
@@ -245,6 +354,7 @@ async def test_setup_entities_and_general_poe_service(
     assert hass.states.get("switch.test_switch_igmp_snooping").state == "on"
     assert hass.states.get("switch.test_switch_igmp_report_suppression").state == "off"
     assert hass.states.get("switch.test_switch_loop_prevention").state == "on"
+    assert hass.states.get("switch.test_switch_leds").state == "on"
     assert hass.states.get("select.test_switch_port_1_speed_and_duplex").state == "Auto"
     assert hass.states.get("select.test_switch_qos_mode").state == "Port based"
     assert (
@@ -256,6 +366,22 @@ async def test_setup_entities_and_general_poe_service(
     assert hass.states.get("sensor.test_switch_port_1_cable_status").state == "normal"
     assert hass.states.get("sensor.test_switch_port_1_cable_length").state == "12"
     assert hass.states.get("button.test_switch_port_1_cable_test")
+    assert hass.states.get("button.test_switch_reboot")
+    assert hass.states.get("sensor.test_switch_lag_configuration").state == "0"
+    assert (
+        hass.states.get("sensor.test_switch_mtu_vlan_configuration").state == "disabled"
+    )
+    assert (
+        hass.states.get("sensor.test_switch_port_vlan_configuration").state
+        == "disabled"
+    )
+    assert (
+        hass.states.get("sensor.test_switch_802_1q_vlan_configuration").state
+        == "disabled"
+    )
+    assert hass.states.get("sensor.test_switch_802_1q_pvid_configuration").attributes[
+        "port_pvids"
+    ] == {"1": 1}
 
     device = dr.async_get(hass).async_get_device(
         identifiers={(DOMAIN, "AA:BB:CC:DD:EE:FF")}
@@ -309,6 +435,22 @@ async def test_setup_entities_and_general_poe_service(
     )
 
     assert FakeTpLinkApi.instance.igmp_setting == (False, True)
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.test_switch_leds"},
+        blocking=True,
+    )
+    assert FakeTpLinkApi.instance.led_setting is False
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.test_switch_reboot"},
+        blocking=True,
+    )
+    assert FakeTpLinkApi.instance.reboot_calls == 1
 
     await hass.services.async_call(
         "button",
@@ -365,3 +507,91 @@ async def test_cable_button_exists_when_initial_probe_fails(
     assert hass.states.get(length_id).state == "12"
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_optional_entities_recover_after_initial_probe_failure(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """Keep optional entities when the first read fails transiently."""
+    monkeypatch.setattr(
+        "custom_components.tplink_easy_smart.update_coordinator.TpLinkApi",
+        InitialOptionalProbeFailureApi,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Switch",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={
+            CONF_NAME: "Test Switch",
+            CONF_HOST: "192.0.2.1",
+            CONF_PORT: 80,
+            CONF_SSL: False,
+            CONF_VERIFY_SSL: False,
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret",
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_ids = (
+        "sensor.test_switch_port_1_tx_good_packets",
+        "sensor.test_switch_port_1_tx_estimated_bandwidth",
+        "switch.test_switch_igmp_snooping",
+        "switch.test_switch_loop_prevention",
+        "select.test_switch_qos_mode",
+    )
+    assert all(
+        hass.states.get(entity_id).state == "unavailable" for entity_id in entity_ids
+    )
+
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    await coordinator._update_port_statistics()
+    await coordinator._update_port_statistics()
+    await coordinator._update_igmp_state()
+    await coordinator._update_loop_prevention_state()
+    await coordinator._update_qos_state()
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_ids[0]).state == "100"
+    assert hass.states.get(entity_ids[1]).state == "0.0"
+    assert hass.states.get(entity_ids[2]).state == "on"
+    assert hass.states.get(entity_ids[3]).state == "on"
+    assert hass.states.get(entity_ids[4]).state == "Port based"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_core_port_state_failure_fails_the_update(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """Do not complete setup without the port count needed by all platforms."""
+    monkeypatch.setattr(
+        "custom_components.tplink_easy_smart.update_coordinator.TpLinkApi",
+        PortStateFailureApi,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Switch",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={
+            CONF_NAME: "Test Switch",
+            CONF_HOST: "192.0.2.1",
+            CONF_PORT: 80,
+            CONF_SSL: False,
+            CONF_VERIFY_SSL: False,
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret",
+        },
+        version=3,
+    )
+
+    coordinator = TpLinkDataUpdateCoordinator(hass, entry)
+    with pytest.raises(UpdateFailed, match="Can not get port states"):
+        await coordinator.async_update()
+    assert coordinator.ports_count == 0
+    await coordinator.async_unload()

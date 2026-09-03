@@ -166,17 +166,20 @@ def _to_dict(json_data: str) -> dict[str, Any] | None:
 # ---------------------------
 #   _convert_value
 # ---------------------------
-def _convert_value(value: str, variable_type: VariableType) -> VariableValue | None:
+def _convert_value(
+    value: str | None, variable_type: VariableType
+) -> VariableValue | None:
     if value is None:
         return None
-    elif variable_type == VariableType.Str:
+    if variable_type == VariableType.Str:
         return value.strip("'\"")
-    elif variable_type == VariableType.Int:
+    if variable_type == VariableType.Int:
         return int(value)
-    elif variable_type == VariableType.List:
+    if variable_type == VariableType.List:
         return list(_to_list(value))
-    elif variable_type == VariableType.Dict:
+    if variable_type == VariableType.Dict:
         return _to_dict(value)
+    return None
 
 
 # ---------------------------
@@ -374,33 +377,32 @@ class TpLinkWebApi:
                 _LOGGER.debug("Authentication success")
                 self._is_initialized = True
                 return
-            elif array_items[0] == "1":
+            if array_items[0] == "1":
                 raise AuthenticationError(
                     "The user name or the password is wrong", AUTH_FAILURE_CREDENTIALS
                 )
-            elif array_items[0] == "2":
+            if array_items[0] == "2":
                 raise AuthenticationError(
                     "The user is not allowed to login", AUTH_USER_BLOCKED
                 )
-            elif array_items[0] == "3":
+            if array_items[0] == "3":
                 raise AuthenticationError(
                     "The number of the user that allowed to login has been full",
                     AUTH_TOO_MANY_USERS,
                 )
-            elif array_items[0] == "4":
+            if array_items[0] == "4":
                 raise AuthenticationError(
                     "The number of logged-in users has reached the limit of 16",
                     AUTH_TOO_MANY_USERS,
                 )
-            elif array_items[0] == "5":
+            if array_items[0] == "5":
                 raise AuthenticationError(
                     "The session is timeout.",
                     AUTH_SESSION_TIMEOUT,
                 )
-            else:
-                raise AuthenticationError(
-                    f"Unknown error {array_items[0]}", AUTH_FAILURE_GENERAL
-                )
+            raise AuthenticationError(
+                f"Unknown error {array_items[0]}", AUTH_FAILURE_GENERAL
+            )
 
         except AuthenticationError as ex:
             _LOGGER.warning("Authentication failed: %r", ex)

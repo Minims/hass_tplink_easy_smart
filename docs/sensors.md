@@ -16,8 +16,9 @@ Home Assistant device and appears in its device information.
 
 ## Port packet statistics
 
-The integration reads `PortStatisticsRpm.htm` and creates the following
-diagnostic sensors for every detected port:
+When `PortStatisticsRpm.htm` is supported, the integration creates the following
+diagnostic sensors for every detected port. If the first request fails
+temporarily, the entities are created as unavailable and recover automatically:
 
 | Entity suffix | Value | Enabled by default |
 |---|---|:---:|
@@ -119,3 +120,21 @@ Press `button.<integration_name>_port_<n>_cable_test` or call
 values. A sensor remains unavailable until the firmware returns a diagnostic
 result. Testing can briefly interrupt the selected port. The integration uses
 the delay returned by the firmware before reading the result.
+
+## VLAN and LAG configuration
+
+Enabled-by-default diagnostic sensors expose configuration even when no custom
+VLAN or LAG exists:
+
+| Sensor suffix | State | Main attributes |
+|---|---|---|
+| `lag_configuration` | Number of configured LAGs (`0` when empty) | `port_count`, `max_groups`, `ports_per_group`, `groups` |
+| `mtu_vlan_configuration` | `enabled` or `disabled` | `port_count`, `uplink_port` |
+| `port_vlan_configuration` | `enabled` or `disabled` | `port_count`, `vlans` |
+| `802_1q_vlan_configuration` | `enabled` or `disabled` | `port_count`, `max_vlans`, `vlans` |
+| `802_1q_pvid_configuration` | `enabled` or `disabled` | `port_count`, `port_pvids` |
+
+An explicitly unsupported firmware page is omitted. A temporary read failure
+makes the corresponding sensor unavailable until a later poll succeeds. VLAN
+and LAG changes remain available through the actions documented in
+[Actions](services.md).

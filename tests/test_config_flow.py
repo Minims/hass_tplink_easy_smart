@@ -66,7 +66,6 @@ class FakeConfigApi:
     async def disconnect(self) -> None:
         if self.session is not None and not self.session.closed:
             self.session.detach()
-        return None
 
     async def get_port_states(self) -> list:
         return []

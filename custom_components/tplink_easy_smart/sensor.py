@@ -150,6 +150,13 @@ class TpLinkCableSensorEntityDescription(TpLinkSensorEntityDescription):
     value_kind: str = "status"
 
 
+@dataclass
+class TpLinkConfigurationSensorEntityDescription(TpLinkSensorEntityDescription):
+    """Describe a switch configuration summary sensor."""
+
+    configuration_kind: str = ""
+
+
 # ---------------------------
 #   async_setup_entry
 # ---------------------------
@@ -191,38 +198,94 @@ async def async_setup_entry(
             )
         )
 
-    for port_number in range(1, coordinator.port_statistics_count + 1):
-        for (
-            metric_key,
-            metric_name,
-            statistics_attribute,
-            rates_attribute,
-            unit,
-            device_class,
-            state_class,
-            icon,
-            enabled_default,
-        ) in _PORT_STATISTIC_TYPES:
+    configuration_sensors = (
+        (
+            coordinator.lag_supported,
+            "lag_configuration",
+            "LAG configuration",
+            "mdi:link-variant",
+            "lag",
+        ),
+        (
+            coordinator.mtu_vlan_supported,
+            "mtu_vlan_configuration",
+            "MTU VLAN configuration",
+            "mdi:lan",
+            "mtu_vlan",
+        ),
+        (
+            coordinator.port_vlan_supported,
+            "port_vlan_configuration",
+            "Port VLAN configuration",
+            "mdi:lan-connect",
+            "port_vlan",
+        ),
+        (
+            coordinator.vlan_8021q_supported,
+            "8021q_vlan_configuration",
+            "802.1Q VLAN configuration",
+            "mdi:tag-multiple",
+            "8021q_vlan",
+        ),
+        (
+            coordinator.pvid_supported,
+            "pvid_configuration",
+            "802.1Q PVID configuration",
+            "mdi:tag-arrow-down",
+            "pvid",
+        ),
+    )
+    for supported, key, name, icon, kind in configuration_sensors:
+        if supported:
             sensors.append(
-                TpLinkPortStatisticsSensor(
+                TpLinkConfigurationSensor(
                     coordinator,
-                    TpLinkPortStatisticsSensorEntityDescription(
-                        key=f"port_{port_number}_{metric_key}",
+                    TpLinkConfigurationSensorEntityDescription(
+                        key=key,
                         icon=icon,
-                        device_class=device_class,
-                        native_unit_of_measurement=unit,
-                        state_class=state_class,
                         entity_category=EntityCategory.DIAGNOSTIC,
-                        entity_registry_enabled_default=enabled_default,
+                        entity_registry_enabled_default=True,
                         device_name=coordinator.get_switch_info().name,
-                        function_uid=f"port_{port_number}_{metric_key}",
-                        function_name=f"Port {port_number} {metric_name}",
-                        port_number=port_number,
-                        statistics_attribute=statistics_attribute,
-                        rates_attribute=rates_attribute,
+                        function_uid=key,
+                        function_name=name,
+                        configuration_kind=kind,
                     ),
                 )
             )
+
+    if coordinator.port_statistics_supported:
+        for port_number in range(1, coordinator.ports_count + 1):
+            for (
+                metric_key,
+                metric_name,
+                statistics_attribute,
+                rates_attribute,
+                unit,
+                device_class,
+                state_class,
+                icon,
+                enabled_default,
+            ) in _PORT_STATISTIC_TYPES:
+                sensors.append(
+                    TpLinkPortStatisticsSensor(
+                        coordinator,
+                        TpLinkPortStatisticsSensorEntityDescription(
+                            key=f"port_{port_number}_{metric_key}",
+                            icon=icon,
+                            device_class=device_class,
+                            native_unit_of_measurement=unit,
+                            state_class=state_class,
+                            entity_category=EntityCategory.DIAGNOSTIC,
+                            entity_registry_enabled_default=enabled_default,
+                            device_name=coordinator.get_switch_info().name,
+                            function_uid=f"port_{port_number}_{metric_key}",
+                            function_name=f"Port {port_number} {metric_name}",
+                            port_number=port_number,
+                            statistics_attribute=statistics_attribute,
+                            rates_attribute=rates_attribute,
+                        ),
+                    )
+                )
 
     for port_number in range(1, coordinator.ports_count + 1):
         sensors.extend(
@@ -396,6 +459,90 @@ class TpLinkPortStatisticsSensor(TpLinkSensor):
             self._attr_native_value = None
             self._attr_available = False
 
+        super()._handle_coordinator_update()
+
+
+class TpLinkConfigurationSensor(TpLinkSensor):
+    """Summarize one switch configuration page."""
+
+    entity_description: TpLinkConfigurationSensorEntityDescription
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Publish configuration state and structured attributes."""
+        kind = self.entity_description.configuration_kind
+        self._attr_extra_state_attributes = {}
+
+        if kind == "lag":
+            state = self.coordinator.get_lag_state()
+            if state is not None:
+                groups = [
+                    {"group_id": group_id, "ports": ports}
+                    for group_id, ports in state.groups.items()
+                    if ports
+                ]
+                self._attr_native_value = len(groups)
+                self._attr_extra_state_attributes = {
+                    "port_count": state.port_count,
+                    "max_groups": state.max_groups,
+                    "ports_per_group": state.ports_per_group,
+                    "groups": groups,
+                }
+        elif kind == "mtu_vlan":
+            state = self.coordinator.get_mtu_vlan_state()
+            if state is not None:
+                self._attr_native_value = "enabled" if state.enabled else "disabled"
+                self._attr_extra_state_attributes = {
+                    "port_count": state.port_count,
+                    "uplink_port": state.uplink_port,
+                }
+        elif kind == "port_vlan":
+            state = self.coordinator.get_port_vlan_state()
+            if state is not None:
+                self._attr_native_value = "enabled" if state.enabled else "disabled"
+                self._attr_extra_state_attributes = {
+                    "port_count": state.port_count,
+                    "vlans": [
+                        {
+                            "vlan_id": vlan.vlan_id,
+                            "member_ports": vlan.member_ports,
+                        }
+                        for vlan in state.vlans
+                    ],
+                }
+        elif kind == "8021q_vlan":
+            state = self.coordinator.get_vlan_8021q_state()
+            if state is not None:
+                self._attr_native_value = "enabled" if state.enabled else "disabled"
+                self._attr_extra_state_attributes = {
+                    "port_count": state.port_count,
+                    "max_vlans": state.max_vlans,
+                    "vlans": [
+                        {
+                            "vlan_id": vlan.vlan_id,
+                            "name": vlan.name,
+                            "tagged_ports": vlan.tagged_ports,
+                            "untagged_ports": vlan.untagged_ports,
+                        }
+                        for vlan in state.vlans
+                    ],
+                }
+        elif kind == "pvid":
+            state = self.coordinator.get_pvid_state()
+            if state is not None:
+                self._attr_native_value = "enabled" if state.enabled else "disabled"
+                self._attr_extra_state_attributes = {
+                    "port_count": state.port_count,
+                    "port_pvids": {
+                        str(port): pvid for port, pvid in enumerate(state.pvids, 1)
+                    },
+                }
+        else:
+            state = None
+
+        self._attr_available = state is not None
+        if state is None:
+            self._attr_native_value = None
         super()._handle_coordinator_update()
 
 

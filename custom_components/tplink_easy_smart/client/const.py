@@ -1,6 +1,7 @@
 from typing import Final
 
 URL_DEVICE_INFO: Final = "SystemInfoRpm.htm"
+URL_LED_SETTINGS_GET: Final = "TurnOnLEDRpm.htm"
 URL_PORTS_SETTINGS_GET: Final = "PortSettingRpm.htm"
 URL_PORT_STATISTICS_GET: Final = "PortStatisticsRpm.htm"
 URL_POE_SETTINGS_GET: Final = "PoeConfigRpm.htm"
@@ -18,6 +19,8 @@ URL_BANDWIDTH_CONTROL_GET: Final = "QosBandWidthControlRpm.htm"
 URL_STORM_CONTROL_GET: Final = "QosStormControlRpm.htm"
 
 URL_PORT_SETTINGS_SET: Final = "port_setting.cgi"
+URL_LED_SETTINGS_SET: Final = "led_on_set.cgi"
+URL_REBOOT: Final = "reboot.cgi"
 URL_POE_SETTINGS_SET: Final = "poe_global_config.cgi"
 URL_POE_PORT_SETTINGS_SET: Final = "poe_port_config.cgi"
 URL_IGMP_SETTINGS_SET: Final = "igmpSnooping.cgi"

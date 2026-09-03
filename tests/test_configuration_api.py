@@ -50,6 +50,7 @@ def _api(pages: dict[str, dict]) -> tuple[TpLinkApi, FakeCoreApi]:
 
 def _configuration_pages() -> dict[str, dict]:
     return {
+        "TurnOnLEDRpm.htm": {"led": 1},
         "IgmpSnoopingRpm.htm": {"igmp_ds": {"state": 1, "suppressionState": 0}},
         "LoopPreventionRpm.htm": {"lpEn": 1},
         "CableDiagRpm.htm": {
@@ -135,6 +136,7 @@ async def test_parse_configuration_pages() -> None:
     assert igmp.enabled is True
     assert igmp.report_suppression is False
     assert (await api.get_loop_prevention()).enabled is True
+    assert await api.get_led_state() is True
 
     cables = await api.get_cable_diagnostics()
     assert cables[1].status.name == "NORMAL"
@@ -157,6 +159,7 @@ async def test_parse_configuration_pages() -> None:
     vlans = await api.get_8021q_vlans()
     assert vlans.vlans[1].tagged_ports == [5]
     assert vlans.vlans[1].untagged_ports == [1, 2]
+    assert (await api.get_pvids()).pvids == [1, 1, 1, 1, 100]
 
     qos = await api.get_qos()
     assert qos.mode is QosMode.PORT_BASED
@@ -236,6 +239,23 @@ async def test_cable_diagnostic_uses_firmware_checkbox_fields(monkeypatch) -> No
     path, query = core.get_calls[-1]
     assert path == "cable_diag_get.cgi"
     assert parse_qs(query) == {"chk_3": ["3"], "Apply": ["Apply"]}
+
+
+async def test_led_and_reboot_use_firmware_forms() -> None:
+    """Submit the exact LED and reboot fields embedded in the firmware."""
+    api, core = _api(_configuration_pages())
+
+    await api.set_led_state(False)
+    path, query = core.get_calls[-1]
+    assert path == "led_on_set.cgi"
+    assert parse_qs(query) == {"rd_led": ["0"], "led_cfg": ["Apply"]}
+
+    await api.reboot()
+    assert core.post_calls[-1] == (
+        "reboot.cgi",
+        {"reboot_op": "reboot", "save_op": "false"},
+    )
+    assert core.authentication_invalidations == 1
 
 
 async def test_mtu_vlan_uses_separate_mode_and_uplink_forms() -> None:

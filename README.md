@@ -4,6 +4,7 @@ A local Home Assistant integration for monitoring and configuring TP-Link Easy
 Smart switches through their embedded web interface.
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/docs/faq/custom_repositories/)
+[![Validate](https://github.com/Minims/hass_tplink_easy_smart/actions/workflows/validate.yml/badge.svg)](https://github.com/Minims/hass_tplink_easy_smart/actions/workflows/validate.yml)
 [![License](https://img.shields.io/github/license/Minims/hass_tplink_easy_smart)](https://github.com/Minims/hass_tplink_easy_smart/blob/master/LICENSE.md)
 [![Release](https://img.shields.io/github/v/release/Minims/hass_tplink_easy_smart)](https://github.com/Minims/hass_tplink_easy_smart/releases/latest)
 [![Release date](https://img.shields.io/github/release-date/Minims/hass_tplink_easy_smart)](https://github.com/Minims/hass_tplink_easy_smart/releases/latest)
@@ -20,11 +21,13 @@ Monitoring:
 - Exact TX/RX good and bad packet counters.
 - Estimated TX, RX, and combined traffic rates.
 - Per-port cable-test buttons, status, and fault distance.
+- LAG, MTU VLAN, port VLAN, 802.1Q VLAN, and per-port PVID summaries.
 - PoE state, power measurements, priorities, and limits when supported.
 
 Configuration:
 
 - Port enable/disable, speed/duplex, and IEEE 802.3x flow control.
+- Front-panel LED on/off and a switch reboot button.
 - IGMP snooping, report suppression, and loop prevention.
 - QoS mode and port priority.
 - Port mirroring and static LAGs.
@@ -34,9 +37,12 @@ Configuration:
 - Reconfiguration of the address, port, credentials, HTTP/HTTPS, and TLS
   verification without deleting the device.
 
-Unsupported pages are detected at runtime, so entities are only exposed when
-the switch firmware provides the corresponding data. Advanced configuration is
-available through Home Assistant actions; see [Actions](docs/services.md).
+Pages that the firmware explicitly does not expose are skipped. If an optional
+page only fails temporarily during startup, its entities remain visible as
+unavailable and recover on a later poll. Cable-test buttons and result sensors
+are always created for every detected physical port so an initial test can
+initialize the firmware data. Advanced configuration is available through Home
+Assistant actions; see [Actions](docs/services.md).
 
 This Minims-maintained integration consolidates Easy Smart management and the
 port-statistics approach from
@@ -66,6 +72,8 @@ independent management path available.
 ## Installation
 
 ### HACS
+
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Minims&repository=hass_tplink_easy_smart&category=integration)
 
 1. In HACS, open **Integrations**, then **Custom repositories**.
 2. Add `https://github.com/Minims/hass_tplink_easy_smart` as an **Integration**.
@@ -110,6 +118,23 @@ Upgrading from an older release re-enables these entities on every port when
 they were disabled by the integration. Entities disabled manually by a user
 remain disabled.
 
+### Frequently used port entities
+
+| Information or control | Home Assistant entity |
+|---|---|
+| Link state and negotiated speed/duplex | `binary_sensor.<name>_port_<n>_state`; read the `speed` attribute |
+| Configured speed/duplex | `select.<name>_port_<n>_speed_and_duplex`; also available as the port state's `speed_config` attribute |
+| Estimated TX, RX, and total bandwidth | Three `sensor.<name>_port_<n>_*estimated_bandwidth` entities and the port state's `tx_estimated_bandwidth_mbps`, `rx_estimated_bandwidth_mbps`, and `total_estimated_bandwidth_mbps` attributes |
+| Cable test | `button.<name>_port_<n>_cable_test`; results appear in the matching cable-status and cable-length sensors |
+| Front-panel LEDs | `switch.<name>_leds` |
+| Reboot | `button.<name>_reboot` |
+| VLAN and LAG state | Five diagnostic configuration-summary sensors; an empty LAG reports `0` and a disabled VLAN mode reports `disabled` rather than `unavailable` |
+
+After installing an update through HACS, restart Home Assistant or reload the
+integration. Estimated-rate values need two successful statistics samples.
+Entities that were explicitly disabled by a user must still be enabled manually
+under **Settings > Devices & services > Entities**.
+
 ## Traffic-rate accuracy
 
 Easy Smart firmware exposes packet counters, not byte counters. Rates are
@@ -133,7 +158,8 @@ automatically expands LAG member changes, but it cannot determine your intended
 management topology.
 
 The integration deliberately does not expose firmware upgrade, factory reset,
-reboot, switch IP configuration, or account-password changes.
+switch IP configuration, or account-password changes. The reboot button does
+not reset the switch or change its configuration.
 
 ## Documentation
 

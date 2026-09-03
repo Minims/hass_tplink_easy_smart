@@ -20,19 +20,24 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client.classes import (
     CableDiagnostic,
     IgmpSnoopingState,
+    LagState,
     LoopPreventionState,
+    MtuVlanState,
     PoePowerLimit,
     PoePriority,
     PortStatistics,
     PortTrafficRates,
+    PortVlanState,
     QosMode,
     QosState,
     TpLinkSystemInfo,
+    Vlan8021QState,
+    VlanPvidState,
 )
 from .client.const import FEATURE_POE
 from .client.coreapi import ApiCallError
@@ -79,6 +84,8 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             session=session,
         )
         self._switch_info: TpLinkSystemInfo | None = None
+        self._led_state: bool | None = None
+        self._led_supported: bool | None = None
         self._port_states: list[PortState] = []
         self._port_statistics: list[PortStatistics] = []
         self._port_traffic_rates: dict[int, PortTrafficRates] = {}
@@ -93,6 +100,16 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self._cable_diagnostics_supported: bool | None = None
         self._qos_state: QosState | None = None
         self._qos_supported: bool | None = None
+        self._lag_state: LagState | None = None
+        self._lag_supported: bool | None = None
+        self._mtu_vlan_state: MtuVlanState | None = None
+        self._mtu_vlan_supported: bool | None = None
+        self._port_vlan_state: PortVlanState | None = None
+        self._port_vlan_supported: bool | None = None
+        self._vlan_8021q_state: Vlan8021QState | None = None
+        self._vlan_8021q_supported: bool | None = None
+        self._pvid_state: VlanPvidState | None = None
+        self._pvid_supported: bool | None = None
 
         estimated_packet_size = config_entry.options.get(
             OPT_ESTIMATED_PACKET_SIZE, DEFAULT_ESTIMATED_PACKET_SIZE
@@ -140,6 +157,11 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Return the number of ports exposing packet counters."""
         return len(self._port_statistics)
 
+    @property
+    def port_statistics_supported(self) -> bool:
+        """Return whether packet statistics are available or still unknown."""
+        return self._port_statistics_supported is not False
+
     def get_port_state(self, number: int) -> PortState | None:
         """Return the specified port state."""
         if number > self.ports_count or number < 1:
@@ -171,19 +193,28 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return self._poe_state
 
     @property
+    def led_supported(self) -> bool:
+        """Return whether LED settings are available or still unknown."""
+        return self._led_supported is not False
+
+    def get_led_state(self) -> bool | None:
+        """Return the front-panel LED state."""
+        return self._led_state
+
+    @property
     def igmp_supported(self) -> bool:
-        """Return whether the switch exposed IGMP settings."""
-        return self._igmp_supported is True
+        """Return whether IGMP settings are available or still unknown."""
+        return self._igmp_supported is not False
 
     @property
     def loop_prevention_supported(self) -> bool:
-        """Return whether the switch exposed loop prevention."""
-        return self._loop_prevention_supported is True
+        """Return whether loop prevention is available or still unknown."""
+        return self._loop_prevention_supported is not False
 
     @property
     def qos_supported(self) -> bool:
-        """Return whether the switch exposed QoS settings."""
-        return self._qos_supported is True
+        """Return whether QoS settings are available or still unknown."""
+        return self._qos_supported is not False
 
     def get_igmp_state(self) -> IgmpSnoopingState | None:
         """Return current IGMP settings."""
@@ -203,6 +234,51 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Return current QoS settings."""
         return self._qos_state
 
+    @property
+    def lag_supported(self) -> bool:
+        """Return whether static LAG settings are available or still unknown."""
+        return self._lag_supported is not False
+
+    def get_lag_state(self) -> LagState | None:
+        """Return current static LAG settings."""
+        return self._lag_state
+
+    @property
+    def mtu_vlan_supported(self) -> bool:
+        """Return whether MTU VLAN settings are available or still unknown."""
+        return self._mtu_vlan_supported is not False
+
+    def get_mtu_vlan_state(self) -> MtuVlanState | None:
+        """Return current MTU VLAN settings."""
+        return self._mtu_vlan_state
+
+    @property
+    def port_vlan_supported(self) -> bool:
+        """Return whether port VLAN settings are available or still unknown."""
+        return self._port_vlan_supported is not False
+
+    def get_port_vlan_state(self) -> PortVlanState | None:
+        """Return current port-based VLAN settings."""
+        return self._port_vlan_state
+
+    @property
+    def vlan_8021q_supported(self) -> bool:
+        """Return whether 802.1Q VLAN settings are available or still unknown."""
+        return self._vlan_8021q_supported is not False
+
+    def get_vlan_8021q_state(self) -> Vlan8021QState | None:
+        """Return current 802.1Q VLAN settings."""
+        return self._vlan_8021q_state
+
+    @property
+    def pvid_supported(self) -> bool:
+        """Return whether PVID settings are available or still unknown."""
+        return self._pvid_supported is not False
+
+    def get_pvid_state(self) -> VlanPvidState | None:
+        """Return current PVID settings."""
+        return self._pvid_state
+
     async def _safe_disconnect(self, api: TpLinkApi) -> None:
         """Disconnect from API."""
         try:
@@ -218,12 +294,18 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Asynchronous update of all data."""
         _LOGGER.debug("Update started")
         await self._update_switch_info()
+        await self._update_led_state()
         await self._update_port_states()
         await self._update_port_statistics()
         await self._update_igmp_state()
         await self._update_loop_prevention_state()
         await self._update_cable_diagnostics()
         await self._update_qos_state()
+        await self._update_lag_state()
+        await self._update_mtu_vlan_state()
+        await self._update_port_vlan_state()
+        await self._update_vlan_8021q_state()
+        await self._update_pvid_state()
         await self._update_poe_state()
         await self._update_port_poe_states()
         _LOGGER.debug("Update completed")
@@ -239,10 +321,25 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _update_port_states(self):
         """Update port states."""
         try:
-            self._port_states = await self._api.get_port_states()
+            port_states = await self._api.get_port_states()
         except Exception as ex:
-            _LOGGER.warning("Can not get port states: %s", repr(ex))
-            self._port_states = []
+            raise UpdateFailed(f"Can not get port states: {ex!r}") from ex
+        self._port_states = port_states
+
+    async def _update_led_state(self) -> None:
+        """Update optional front-panel LED settings."""
+        if self._led_supported is False:
+            return
+        try:
+            self._led_state = await self._api.get_led_state()
+        except Exception as ex:
+            self._led_state = None
+            if self._is_unsupported_error(ex) and self._led_supported is None:
+                self._led_supported = False
+            else:
+                _LOGGER.warning("Can not get LED settings: %r", ex)
+            return
+        self._led_supported = True
 
     async def _update_port_statistics(self) -> None:
         """Update port packet counters and derived rates."""
@@ -253,8 +350,7 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             statistics = await self._api.get_port_statistics()
         except Exception as ex:
             if (
-                isinstance(ex, ApiCallError)
-                and ex.code == 404
+                self._is_unsupported_error(ex)
                 and self._port_statistics_supported is None
             ):
                 _LOGGER.info("Port statistics are not supported by this switch")
@@ -298,7 +394,7 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._igmp_state = await self._api.get_igmp_snooping()
         except Exception as ex:
             self._igmp_state = None
-            if self._is_unsupported_error(ex):
+            if self._is_unsupported_error(ex) and self._igmp_supported is None:
                 self._igmp_supported = False
             else:
                 _LOGGER.warning("Can not get IGMP settings: %r", ex)
@@ -313,7 +409,10 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._loop_prevention_state = await self._api.get_loop_prevention()
         except Exception as ex:
             self._loop_prevention_state = None
-            if self._is_unsupported_error(ex):
+            if (
+                self._is_unsupported_error(ex)
+                and self._loop_prevention_supported is None
+            ):
                 self._loop_prevention_supported = False
             else:
                 _LOGGER.warning("Can not get loop-prevention settings: %r", ex)
@@ -328,7 +427,10 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._cable_diagnostics = await self._api.get_cable_diagnostics()
         except Exception as ex:
             self._cable_diagnostics = []
-            if self._is_unsupported_error(ex):
+            if (
+                self._is_unsupported_error(ex)
+                and self._cable_diagnostics_supported is None
+            ):
                 self._cable_diagnostics_supported = False
             else:
                 _LOGGER.warning("Can not get cable diagnostics: %r", ex)
@@ -343,12 +445,87 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._qos_state = await self._api.get_qos()
         except Exception as ex:
             self._qos_state = None
-            if self._is_unsupported_error(ex):
+            if self._is_unsupported_error(ex) and self._qos_supported is None:
                 self._qos_supported = False
             else:
                 _LOGGER.warning("Can not get QoS settings: %r", ex)
             return
         self._qos_supported = True
+
+    async def _update_lag_state(self) -> None:
+        """Update optional static LAG settings."""
+        if self._lag_supported is False:
+            return
+        try:
+            self._lag_state = await self._api.get_lags()
+        except Exception as ex:
+            self._lag_state = None
+            if self._is_unsupported_error(ex) and self._lag_supported is None:
+                self._lag_supported = False
+            else:
+                _LOGGER.warning("Can not get LAG settings: %r", ex)
+            return
+        self._lag_supported = True
+
+    async def _update_mtu_vlan_state(self) -> None:
+        """Update optional MTU VLAN settings."""
+        if self._mtu_vlan_supported is False:
+            return
+        try:
+            self._mtu_vlan_state = await self._api.get_mtu_vlan()
+        except Exception as ex:
+            self._mtu_vlan_state = None
+            if self._is_unsupported_error(ex) and self._mtu_vlan_supported is None:
+                self._mtu_vlan_supported = False
+            else:
+                _LOGGER.warning("Can not get MTU VLAN settings: %r", ex)
+            return
+        self._mtu_vlan_supported = True
+
+    async def _update_port_vlan_state(self) -> None:
+        """Update optional port-based VLAN settings."""
+        if self._port_vlan_supported is False:
+            return
+        try:
+            self._port_vlan_state = await self._api.get_port_vlans()
+        except Exception as ex:
+            self._port_vlan_state = None
+            if self._is_unsupported_error(ex) and self._port_vlan_supported is None:
+                self._port_vlan_supported = False
+            else:
+                _LOGGER.warning("Can not get port VLAN settings: %r", ex)
+            return
+        self._port_vlan_supported = True
+
+    async def _update_vlan_8021q_state(self) -> None:
+        """Update optional 802.1Q VLAN settings."""
+        if self._vlan_8021q_supported is False:
+            return
+        try:
+            self._vlan_8021q_state = await self._api.get_8021q_vlans()
+        except Exception as ex:
+            self._vlan_8021q_state = None
+            if self._is_unsupported_error(ex) and self._vlan_8021q_supported is None:
+                self._vlan_8021q_supported = False
+            else:
+                _LOGGER.warning("Can not get 802.1Q VLAN settings: %r", ex)
+            return
+        self._vlan_8021q_supported = True
+
+    async def _update_pvid_state(self) -> None:
+        """Update optional PVID settings."""
+        if self._pvid_supported is False:
+            return
+        try:
+            self._pvid_state = await self._api.get_pvids()
+        except Exception as ex:
+            self._pvid_state = None
+            if self._is_unsupported_error(ex) and self._pvid_supported is None:
+                self._pvid_supported = False
+            else:
+                _LOGGER.warning("Can not get PVID settings: %r", ex)
+            return
+        self._pvid_supported = True
 
     async def _update_port_poe_states(self):
         """Update port PoE states."""
@@ -369,7 +546,7 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             _LOGGER.debug("Device info not found")
             return None
 
-        result = DeviceInfo(
+        return DeviceInfo(
             configuration_url=self._api.device_url,
             connections={(dr.CONNECTION_NETWORK_MAC, switch_info.mac)},
             identifiers={(DOMAIN, switch_info.mac)},
@@ -379,7 +556,6 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
             hw_version=switch_info.hardware,
             sw_version=switch_info.firmware,
         )
-        return result
 
     async def set_port_state(
         self,
@@ -408,6 +584,17 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator[None]):
         await self._api.set_igmp_snooping(enabled, report_suppression)
         self._igmp_state = IgmpSnoopingState(enabled, report_suppression)
         self.async_update_listeners()
+
+    async def async_set_led_state(self, enabled: bool) -> None:
+        """Set and locally refresh the front-panel LED state."""
+        await self._api.set_led_state(enabled)
+        self._led_state = enabled
+        self._led_supported = True
+        self.async_update_listeners()
+
+    async def async_reboot(self) -> None:
+        """Reboot the switch."""
+        await self._api.reboot()
 
     async def async_set_loop_prevention(self, enabled: bool) -> None:
         """Set and refresh global loop prevention."""

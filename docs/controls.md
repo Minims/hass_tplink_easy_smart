@@ -34,6 +34,18 @@ by the TL-SG105E V5 web interface:
 These configuration entities are enabled by default. A forced mode must match
 the device at the other end of the cable.
 
+## Front-panel LEDs
+
+`switch.<integration_name>_leds` turns the switch's front-panel LEDs on or off
+when the firmware exposes the LED page. This control is enabled by default and
+does not affect Ethernet forwarding.
+
+## Reboot
+
+`button.<integration_name>_reboot` requests a normal system reboot. It is
+enabled by default. The switch and all connected traffic are unavailable while
+the device restarts; this button does not perform a factory reset.
+
 ## IGMP and loop prevention
 
 When supported by the firmware, the integration creates:
@@ -43,12 +55,16 @@ When supported by the firmware, the integration creates:
 - `switch.<integration_name>_loop_prevention`
 
 Changing report suppression preserves the current IGMP snooping state, and
-vice versa.
+vice versa. A temporary startup read failure leaves these controls unavailable
+until a later poll succeeds instead of removing them from the device.
 
 ## QoS
 
 `select.<integration_name>_qos_mode` selects Port based, 802.1p based, or
 DSCP/802.1p based classification when the page is supported.
+
+A temporary startup read failure leaves the QoS selects unavailable until a
+later poll succeeds instead of removing them from the device.
 
 `select.<integration_name>_port_<n>_qos_priority` is enabled by default and
 applies priorities 1 (lowest) through 4 (highest). It can only be changed in

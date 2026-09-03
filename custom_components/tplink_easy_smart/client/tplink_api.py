@@ -34,6 +34,7 @@ from .classes import (
     TpLinkSystemInfo,
     Vlan8021Q,
     Vlan8021QState,
+    VlanPvidState,
 )
 from .const import (
     FEATURE_POE,
@@ -51,6 +52,8 @@ from .const import (
     URL_LAG_DELETE,
     URL_LAG_GET,
     URL_LAG_SET,
+    URL_LED_SETTINGS_GET,
+    URL_LED_SETTINGS_SET,
     URL_LOOP_PREVENTION_GET,
     URL_LOOP_PREVENTION_SET,
     URL_MIRROR_DESTINATION_SET,
@@ -69,6 +72,7 @@ from .const import (
     URL_QOS_GET,
     URL_QOS_MODE_SET,
     URL_QOS_PRIORITY_SET,
+    URL_REBOOT,
     URL_STORM_CONTROL_GET,
     URL_STORM_CONTROL_SET,
 )
@@ -323,6 +327,31 @@ class TpLinkApi:
             firmware=get_value("firmwareStr"),
             hardware=get_value("hardwareStr"),
         )
+
+    async def get_led_state(self) -> bool:
+        """Return the global front-panel LED state."""
+        state = await self._core_api.get_variable(
+            URL_LED_SETTINGS_GET, "led", VariableType.Int
+        )
+        if not isinstance(state, int):
+            raise DataFormatError("LED settings do not contain 'led'")
+        return bool(state)
+
+    async def set_led_state(self, enabled: bool) -> None:
+        """Enable or disable the front-panel LEDs after checking support."""
+        await self.get_led_state()
+        await self._apply_get(
+            URL_LED_SETTINGS_SET,
+            _query({"rd_led": int(enabled), "led_cfg": "Apply"}),
+        )
+
+    async def reboot(self) -> None:
+        """Reboot the switch without changing its saved configuration."""
+        await self._apply_post(
+            URL_REBOOT,
+            {"reboot_op": "reboot", "save_op": "false"},
+        )
+        self._core_api.invalidate_authentication()
 
     async def get_port_states(self) -> list[PortState]:
         """Return the port states."""
@@ -910,9 +939,7 @@ class TpLinkApi:
             _query({"selVlans": vlan_id, "qvlan_del": "Delete"}),
         )
 
-    async def _get_pvid_configuration(
-        self,
-    ) -> tuple[bool, list[int], list[int], list[int], list[int]]:
+    async def get_pvids(self) -> VlanPvidState:
         """Return PVID mode, values, VLAN IDs, membership masks and LAGs."""
         data = await self._core_api.get_variable(
             URL_8021Q_PVID_GET, "pvid_ds", VariableType.Dict
@@ -935,25 +962,26 @@ class TpLinkApi:
             if isinstance(raw_trunk_groups, list)
             else [0] * port_count
         )
-        return bool(data.get("state", 0)), pvids, vlan_ids, member_masks, trunk_groups
+        return VlanPvidState(
+            enabled=bool(data.get("state", 0)),
+            port_count=port_count,
+            pvids=pvids,
+            vlan_ids=vlan_ids,
+            member_masks=member_masks,
+            trunk_groups=trunk_groups,
+        )
 
     async def set_pvid(self, ports: Iterable[int], vlan_id: int) -> None:
         """Set the PVID of one or more physical ports."""
-        (
-            enabled,
-            _pvids,
-            vlan_ids,
-            member_masks,
-            trunk_groups,
-        ) = await self._get_pvid_configuration()
-        if not enabled:
+        state = await self.get_pvids()
+        if not state.enabled:
             raise ActionError("802.1Q VLAN mode is disabled")
-        members = _expand_trunk_ports(ports, trunk_groups)
+        members = _expand_trunk_ports(ports, state.trunk_groups)
         if not members:
             raise ActionError("At least one port must be selected")
-        if vlan_id not in vlan_ids:
+        if vlan_id not in state.vlan_ids:
             raise ActionError(f"VLAN {vlan_id} does not exist")
-        vlan_mask = member_masks[vlan_ids.index(vlan_id)]
+        vlan_mask = state.member_masks[state.vlan_ids.index(vlan_id)]
         invalid_members = [
             port for port in members if not vlan_mask & (1 << (port - 1))
         ]

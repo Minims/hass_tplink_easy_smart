@@ -3,7 +3,11 @@
 from dataclasses import dataclass, field
 from typing import Final
 
-from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
+from homeassistant.components.button import (
+    ButtonDeviceClass,
+    ButtonEntity,
+    ButtonEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -22,18 +26,24 @@ ENTITY_DOMAIN: Final = "button"
 
 
 @dataclass
-class TpLinkCableTestButtonDescription(ButtonEntityDescription):
-    """Describe one port cable-test button."""
+class TpLinkButtonEntityDescription(ButtonEntityDescription):
+    """Describe a TP-Link button."""
 
     function_name: str | None = None
     function_uid: str | None = None
     device_name: str | None = None
-    port_number: int = 0
     name: str | None = field(init=False)
 
     def __post_init__(self) -> None:
         """Build the legacy entity name used by this integration."""
         self.name = generate_entity_name(self.function_name, self.device_name)
+
+
+@dataclass
+class TpLinkCableTestButtonDescription(TpLinkButtonEntityDescription):
+    """Describe one port cable-test button."""
+
+    port_number: int = 0
 
 
 async def async_setup_entry(
@@ -44,7 +54,22 @@ async def async_setup_entry(
     """Set up cable-test buttons for every physical port."""
     coordinator = get_coordinator(hass, config_entry)
     device_name = coordinator.get_switch_info().name
-    async_add_entities(
+    entities: list[ButtonEntity] = [
+        TpLinkRebootButton(
+            coordinator,
+            TpLinkButtonEntityDescription(
+                key="reboot",
+                icon="mdi:restart",
+                device_class=ButtonDeviceClass.RESTART,
+                entity_category=EntityCategory.CONFIG,
+                entity_registry_enabled_default=True,
+                device_name=device_name,
+                function_uid="reboot",
+                function_name="Reboot",
+            ),
+        )
+    ]
+    entities.extend(
         TpLinkCableTestButton(
             coordinator,
             TpLinkCableTestButtonDescription(
@@ -60,19 +85,18 @@ async def async_setup_entry(
         )
         for port_number in range(1, coordinator.ports_count + 1)
     )
+    async_add_entities(entities)
 
 
-class TpLinkCableTestButton(
-    CoordinatorEntity[TpLinkDataUpdateCoordinator], ButtonEntity
-):
-    """Run a cable diagnostic on one physical port."""
+class TpLinkButton(CoordinatorEntity[TpLinkDataUpdateCoordinator], ButtonEntity):
+    """Base class for TP-Link buttons."""
 
-    entity_description: TpLinkCableTestButtonDescription
+    entity_description: TpLinkButtonEntityDescription
 
     def __init__(
         self,
         coordinator: TpLinkDataUpdateCoordinator,
-        description: TpLinkCableTestButtonDescription,
+        description: TpLinkButtonEntityDescription,
     ) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
@@ -84,6 +108,20 @@ class TpLinkCableTestButton(
         self.entity_id = generate_entity_id(
             coordinator, ENTITY_DOMAIN, description.function_name
         )
+
+
+class TpLinkRebootButton(TpLinkButton):
+    """Reboot the switch."""
+
+    async def async_press(self) -> None:
+        """Request a switch reboot."""
+        await self.coordinator.async_reboot()
+
+
+class TpLinkCableTestButton(TpLinkButton):
+    """Run a cable diagnostic on one physical port."""
+
+    entity_description: TpLinkCableTestButtonDescription
 
     async def async_press(self) -> None:
         """Run the test and refresh the cable diagnostic sensors."""
