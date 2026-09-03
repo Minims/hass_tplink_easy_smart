@@ -11,6 +11,16 @@ Smart switches through their embedded web interface.
 [![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-minims-FFDD00?logo=buymeacoffee&logoColor=000)](https://www.buymeacoffee.com/minims)
 ![Maintained](https://img.shields.io/maintenance/yes/2026)
 
+## Companion repositories
+
+The integration and dashboard card are maintained together but installed as
+two separate HACS repositories:
+
+| Component | Repository | Open in HACS |
+|---|---|---|
+| Home Assistant integration | [`Minims/hass_tplink_easy_smart`](https://github.com/Minims/hass_tplink_easy_smart) | [![Open the TP-Link Easy Smart integration in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Minims&repository=hass_tplink_easy_smart&category=integration) |
+| Dashboard card | [`Minims/tplink-easy-smart-card`](https://github.com/Minims/tplink-easy-smart-card) | [![Open the TP-Link Easy Smart Card in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Minims&repository=tplink-easy-smart-card&category=plugin) |
+
 ## Features
 
 Monitoring:
@@ -73,9 +83,8 @@ independent management path available.
 
 ### HACS
 
-[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Minims&repository=hass_tplink_easy_smart&category=integration)
-
-1. In HACS, open **Integrations**, then **Custom repositories**.
+1. Use the integration badge above, or in HACS open **Integrations**, then
+   **Custom repositories**.
 2. Add `https://github.com/Minims/hass_tplink_easy_smart` as an **Integration**.
 3. Install **TP-Link Easy Smart** and restart Home Assistant.
 4. Open **Settings > Devices & services > Add integration** and select
