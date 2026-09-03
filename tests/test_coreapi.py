@@ -35,6 +35,18 @@ def test_get_variables_accepts_script_attributes_and_multiple_scripts() -> None:
     }
 
 
+def test_get_variables_accepts_firmware_assignments_without_semicolons() -> None:
+    """Parse consecutive variables exactly as emitted by the LED page."""
+    page = """
+    <script>
+    var led = 1
+    var tip = "";
+    </script>
+    """
+
+    assert _get_variables(page) == {"led": "1", "tip": '""'}
+
+
 def test_convert_firmware_values() -> None:
     assert _convert_value("5", VariableType.Int) == 5
     assert _convert_value('new Array("0", "session")', VariableType.List) == [

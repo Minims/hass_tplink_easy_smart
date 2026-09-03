@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.9.6
+
+- Fix LED-state parsing for firmware pages that separate JavaScript variables
+  with newlines instead of semicolons.
+- Replace the unavailable loop-prevention icon with the supported
+  `mdi:shield-sync-outline` icon.
+
 ## 2026.9.5
 
 - Add an enabled-by-default front-panel LED switch and reboot button using the

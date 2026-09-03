@@ -353,7 +353,9 @@ async def test_setup_entities_and_general_poe_service(
     assert hass.states.get("switch.test_switch_port_1_flow_control").state == "on"
     assert hass.states.get("switch.test_switch_igmp_snooping").state == "on"
     assert hass.states.get("switch.test_switch_igmp_report_suppression").state == "off"
-    assert hass.states.get("switch.test_switch_loop_prevention").state == "on"
+    loop_prevention = hass.states.get("switch.test_switch_loop_prevention")
+    assert loop_prevention.state == "on"
+    assert loop_prevention.attributes["icon"] == "mdi:shield-sync-outline"
     assert hass.states.get("switch.test_switch_leds").state == "on"
     assert hass.states.get("select.test_switch_port_1_speed_and_duplex").state == "Auto"
     assert hass.states.get("select.test_switch_qos_mode").state == "Port based"

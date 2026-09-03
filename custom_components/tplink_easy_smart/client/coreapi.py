@@ -32,7 +32,8 @@ _SCRIPT_REGEX = re.compile(
     r"<script(?:\s[^>]*)?>(.*?)</script>", re.IGNORECASE | re.DOTALL
 )
 _VARIABLES_REGEX = re.compile(
-    r"\bvar\s+(?P<variable>[a-zA-Z0-9_]+)\s*=\s*(?P<value>[^;]+);",
+    r"\bvar\s+(?P<variable>[a-zA-Z0-9_]+)\s*=\s*"
+    r"(?P<value>.*?)(?=;|\r?\n\s*\bvar\s+|\Z)",
     re.DOTALL,
 )
 _ARRAY_VALUES_REGEX = re.compile(r"\s*new\s*Array\s*\((?P<items>[^\)]*)\)")

@@ -177,7 +177,7 @@ async def async_setup_entry(
                 coordinator,
                 TpLinkSwitchEntityDescription(
                     key="loop_prevention",
-                    icon="mdi:vector-loop",
+                    icon="mdi:shield-sync-outline",
                     device_name=coordinator.get_switch_info().name,
                     function_uid=_FUNCTION_UID_LOOP_PREVENTION,
                     function_name=_FUNCTION_DISPLAYED_NAME_LOOP_PREVENTION,
