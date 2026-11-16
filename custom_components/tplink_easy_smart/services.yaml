@@ -153,14 +153,16 @@ set_port_mirror:
         number:
           min: 1
           mode: box
-    ingress_ports: &port_list
+    ingress_ports:
+      <<: &port_list
+        description: YAML list of one-based port numbers, for example `[1, 2]`.
+        default: []
+        selector:
+          object:
       name: Port list
-      description: YAML list of one-based port numbers, for example `[1, 2]`.
-      default: []
-      selector:
-        object:
     egress_ports:
       <<: *port_list
+      name: Port list
 
 set_lag:
   name: Create or update a LAG
@@ -307,6 +309,7 @@ set_pvid:
     mac_address: *mac_address
     ports:
       <<: *port_list
+      name: Port list
       required: true
     vlan_id:
       name: VLAN ID

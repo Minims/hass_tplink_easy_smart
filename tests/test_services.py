@@ -1,7 +1,10 @@
 """Tests for service input validation and corrected display mappings."""
 
+from pathlib import Path
+
 import pytest
 import voluptuous as vol
+from homeassistant.util.yaml import load_yaml
 
 from custom_components.tplink_easy_smart.client.classes import PoeClass
 from custom_components.tplink_easy_smart.displayed_values import DISPLAYED_POE_CLASSES
@@ -10,6 +13,21 @@ from custom_components.tplink_easy_smart.services import SERVICES, ServiceNames
 
 def _service_schema(name: ServiceNames) -> vol.Schema:
     return next(service.schema for service in SERVICES if service.name == name)
+
+
+def test_service_descriptions_load_without_duplicate_keys(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    descriptions_path = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "tplink_easy_smart"
+        / "services.yaml"
+    )
+
+    load_yaml(descriptions_path)
+
+    assert not any("duplicate key" in record.getMessage() for record in caplog.records)
 
 
 def test_service_boolean_string_is_parsed_correctly() -> None:
