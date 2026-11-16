@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.0
+
+- Fix duplicate YAML key warnings in action descriptions while preserving all
+  field labels, selectors, and defaults.
+
 ## 2026.9.7
 
 - Fix cable diagnostics on TL-SG105E V5 firmware 20250710 by parsing the
